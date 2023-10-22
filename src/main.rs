@@ -5,6 +5,7 @@ use colored::Colorize;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+#[derive(Default)]
 struct FilePosition {
     line: u32,
     col: u32,
@@ -15,20 +16,25 @@ struct FilePosition {
 /// Preprocessor Directive Parsing State
 ///
 #[derive(PartialEq)]
-enum PIPS {
+#[derive(Default)]
+enum Pips {
+    #[default]
     None,
     DirectiveValues(Vec<String>),
 }
 
 #[derive(Debug)]
+#[derive(Default)]
 struct PreprocessorDirective {
     values: Vec<String>,
 }
 
+
+#[derive(Default)]
 struct PreprocessorState {
     comment_level: u32,
     inline_comment: bool,
-    directive_parsing_state: PIPS,
+    directive_parsing_state: Pips,
     comment_unclosed_positon: Vec<FilePosition>,
     current_position: FilePosition,
     _included: HashSet<String>,
@@ -45,42 +51,13 @@ impl Clone for FilePosition {
     }
 }
 
-impl Default for PreprocessorDirective {
-    fn default() -> Self {
-        Self { values: vec![] }
-    }
-}
-
-impl Default for FilePosition {
-    fn default() -> Self {
-        Self {
-            line: 0,
-            col: 0,
-            filename: String::new(),
-            filepath: String::new(),
-        }
-    }
-}
-
-impl Default for PreprocessorState {
-    fn default() -> Self {
-        Self {
-            comment_level: 0,
-            inline_comment: false,
-            directive_parsing_state: PIPS::None,
-            comment_unclosed_positon: vec![],
-            current_position: FilePosition::default(),
-            _included: HashSet::<String>::new(),
-        }
-    }
-}
 
 #[rustfmt::skip]
 fn deal_with_c(c: char, state: &mut PreprocessorState) -> String {
     match &mut state.directive_parsing_state {
-        PIPS::None => String::from(c),
-        PIPS::DirectiveValues(ref mut values) if c.is_whitespace() => { values.push(String::new()); String::new()},
-        PIPS::DirectiveValues(ref mut values) => { values.last_mut().unwrap().push(c); String::new()},
+        Pips::None => String::from(c),
+        Pips::DirectiveValues(ref mut values) if c.is_whitespace() => { values.push(String::new()); String::new()},
+        Pips::DirectiveValues(ref mut values) => { values.last_mut().unwrap().push(c); String::new()},
     }
 }
 
@@ -98,8 +75,8 @@ fn preprocess_character(c: char, state: &mut PreprocessorState, previous_char: &
         _ if (prev=='/' || prev=='*') && in_comment => {  String::new() },
         _ if in_comment => { String::new() },
         '#' => match state.directive_parsing_state {
-                PIPS::None => { state.directive_parsing_state = PIPS::DirectiveValues(vec![String::new()]); String::new() },
-                _ => panic!("Two consecutive \"#\" found"),
+                Pips::None => { state.directive_parsing_state = Pips::DirectiveValues(vec![String::new()]); String::new() },
+                Pips::DirectiveValues(_) => panic!("Two consecutive \"#\" found"),
             },
         _ if prev=='/' || prev=='*' => {  String::from(prev)+deal_with_c(c, state).as_str() },
         '/'|'*' => { String::new() }
@@ -111,8 +88,8 @@ fn build_directive_tree(_current_directive: &PreprocessorDirective) {}
 
 fn eval_tree() {}
 
-fn process_directive(current_directive: PreprocessorDirective) -> String {
-    build_directive_tree(&current_directive);
+fn process_directive(current_directive: &PreprocessorDirective) -> String {
+    build_directive_tree(current_directive);
     eval_tree();
     match current_directive.values.get(0).unwrap().as_str() {
         "define" => String::from("define"),
@@ -123,12 +100,12 @@ fn process_directive(current_directive: PreprocessorDirective) -> String {
     }
 }
 
-fn preprocess(content: String, state: &mut PreprocessorState) -> String {
+fn preprocess(content: &str, state: &mut PreprocessorState) -> String {
     let processed_file = content
         .lines()
         .map(|line| {
             state.inline_comment = false;
-            state.directive_parsing_state = PIPS::None;
+            state.directive_parsing_state = Pips::None;
             let mut current_directive = PreprocessorDirective::default();
             let line_string = line.to_string();
             let mut previous_char: char = ' ';
@@ -137,15 +114,15 @@ fn preprocess(content: String, state: &mut PreprocessorState) -> String {
                 .map(|c| preprocess_character(c, state, &mut previous_char))
                 .collect::<String>()
                 + "\n";
-            if let PIPS::DirectiveValues(values) = &state.directive_parsing_state {
+            if let Pips::DirectiveValues(values) = &state.directive_parsing_state {
                 current_directive.values = values.clone();
             };
-            if state.directive_parsing_state != PIPS::None {
-                // Preprocessor directive
-                println!("Struct: {:?}", current_directive);
-                process_directive(current_directive)+"\n"
-            } else {
+            if state.directive_parsing_state == Pips::None {
                 preprocessed_line
+            } else {
+                // Preprocessor directive
+                println!("Struct: {current_directive:?}");
+                process_directive(&current_directive)+"\n"
             }
         })
         .collect();
@@ -172,11 +149,10 @@ fn preprocess_unit(filepath: PathBuf) -> String {
         .into_string()
         .unwrap();
     state.current_position.filepath = filepath.into_os_string().into_string().unwrap();
-    preprocess(content, &mut state)
+    preprocess(&content, &mut state)
 }
 
 fn main() {
-    let preprocessed_file: String = preprocess_unit(PathBuf::from("fichier.c"));
-
+    let preprocessed_file = preprocess_unit(PathBuf::from("fichier.c"));
     println!("{preprocessed_file}");
 }
