@@ -1,4 +1,6 @@
+#![allow(unused)]
 
+#[derive(Debug)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -20,6 +22,7 @@ pub enum BinaryOperator {
     LogicalOr,
 }
 
+#[derive(Debug)]
 pub enum UnaryOperator {
     Minus,
     BitwiseNot,
@@ -30,8 +33,9 @@ pub enum UnaryOperator {
     PostDecrement,
 }
 
-pub enum Expression {
-    BinaryOp { operator : BinaryOperator, left : Box<Expression>, right : Box<Expression>},
-    UnaryOp { operator : UnaryOperator, right : Box<Expression>},
+#[derive(Debug)]
+pub enum ExpressionTree {
+    BinaryOp { operator : BinaryOperator, left : Box<ExpressionTree>, right : Box<ExpressionTree>},
+    UnaryOp { operator : UnaryOperator, right : Box<ExpressionTree>},
     Literal { value : String },
-} 
+}

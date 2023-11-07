@@ -1,8 +1,11 @@
+use std::clone::Clone;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 use colored::Colorize;
+
+use crate::expression::ExpressionTree;
 
 
 #[derive(Default, Debug)]
@@ -26,13 +29,13 @@ pub enum Pips {
 
 
 #[derive(Default, Debug)]
-pub struct StorePreprocessorDirective {
+pub struct StoreDirective {
     values:  Vec<String>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Default)]
-pub enum PreprocessorDirective {
+pub enum Directive {
     #[default]
     None,
     Define {
@@ -44,7 +47,7 @@ pub enum PreprocessorDirective {
         macro_name: String,
     },
     If {
-        expression: String,
+        expression: ExpressionTree,
     },
     Include {
         filename: String,
@@ -63,7 +66,7 @@ pub enum PreprocessorDirective {
 }
 
 #[derive(Default, Debug)]
-pub struct PreprocessorState {
+pub struct State {
     comment_level: u32,
     inline_comment: bool,
     directive_parsing_state: Pips,
@@ -96,7 +99,7 @@ impl Clone for FilePosition {
 }
 
 #[rustfmt::skip]
-pub fn deal_with_c(c: char, state: &mut PreprocessorState, current_directive: &mut StorePreprocessorDirective) -> String {
+pub fn deal_with_c(c: char, state: &mut State, current_directive: &mut StoreDirective) -> String {
     let mut tmp_dir_state = None ;
     let res = 
     match &mut state.directive_parsing_state {
@@ -106,7 +109,7 @@ pub fn deal_with_c(c: char, state: &mut PreprocessorState, current_directive: &m
         Pips::DirectiveName(ref mut name) =>{name.push(c); String::new()},
         Pips::DirectiveArgs(ref mut args ) if args.is_empty() && c == '(' => {args.push(String::new()); String::new()},
         Pips::DirectiveArgs(_) if c == '(' => panic!("Nested parenthesis are not supported"),
-        Pips::DirectiveArgs(ref mut args ) if c == ')' => {tmp_dir_state = Some(Pips::DirectiveValue(String::new())); current_directive.values.extend(args.iter().map(|s| s.to_owned())); String::new()},
+        Pips::DirectiveArgs(ref mut args ) if c == ')' => {tmp_dir_state = Some(Pips::DirectiveValue(String::new())); current_directive.values.extend(args.iter().map(Clone::clone)); String::new()},
         Pips::DirectiveArgs(ref mut args ) if args.is_empty() => {tmp_dir_state = Some(Pips::DirectiveValue(String::from(c))); String::new()},
         Pips::DirectiveArgs(ref mut args ) => {args.last_mut().expect("Fatal Error: we're fucked!").push(c); String::new()},
         Pips::DirectiveValue(ref mut value) => {value.push(c); String::new()},
@@ -118,7 +121,7 @@ pub fn deal_with_c(c: char, state: &mut PreprocessorState, current_directive: &m
 }
 
 #[rustfmt::skip]
-pub fn preprocess_character(c: char, state: &mut PreprocessorState, previous_char: &mut char, current_directive: &mut StorePreprocessorDirective) -> String {
+pub fn preprocess_character(c: char, state: &mut State, previous_char: &mut char, current_directive: &mut StoreDirective) -> String {
     let in_comment = state.comment_level>0 || state.inline_comment;
     // Match double chars tokens
     let prev = *previous_char;
@@ -141,17 +144,14 @@ pub fn preprocess_character(c: char, state: &mut PreprocessorState, previous_cha
 }
 
 #[rustfmt::skip]
-pub fn preprocess_define(directive: &PreprocessorDirective, state: &mut PreprocessorState) -> String {
-    if let PreprocessorDirective::Define { macro_name, macro_args, macro_value } = directive {
-        match macro_args.len() {
-            0 => {
-                state.defines.insert(macro_name.clone(), MacroValue::String(macro_value.clone()));
-                String::new()
-            }
-            _ => {
-                state.defines.insert(macro_name.clone(), MacroValue::Function { args: macro_args.clone(), body: macro_value.clone() });
-                String::new()
-            }
+pub fn preprocess_define(directive: &Directive, state: &mut State) -> String {
+    if let Directive::Define { macro_name, macro_args, macro_value } = directive {
+        if macro_args.is_empty() {
+            state.defines.insert(macro_name.clone(), MacroValue::String(macro_value.clone()));
+            String::new()
+        } else {
+            state.defines.insert(macro_name.clone(), MacroValue::Function { args: macro_args.clone(), body: macro_value.clone() });
+            String::new()
         }
     } else {
         panic!("Not a define directive");
@@ -159,35 +159,47 @@ pub fn preprocess_define(directive: &PreprocessorDirective, state: &mut Preproce
 }
 
 #[derive(PartialEq, Debug)]
-enum PreprocessorDirectiveParsingState {
+enum DirectiveParsingState {
     Name,
     AfterName,
     Args,
     Value,
 }
 
-fn convert_from_store(directive: &StorePreprocessorDirective) -> PreprocessorDirective {
+#[allow(unused)]
+fn infix_to_postfix(expression: String) -> String {
+    todo!()    
+}
+
+#[allow(unused)]
+fn expression_tree_from_string(expression_string: String) -> ExpressionTree {
+    let tokens = parse(expression_string);
+    let posix = infix_to_postfix(expression_string);
+    ExpressionTree::Literal { value: String::new() }
+}
+
+fn convert_from_store(directive: &StoreDirective) -> Directive {
     match directive.values.iter().map(|s| s.as_str().trim()).collect::<Vec<&str>>().as_slice() {
         ["define", values] => {
-            let mut state = PreprocessorDirectiveParsingState::Name ;
+            let mut state = DirectiveParsingState::Name ;
             let mut brace_level: usize = 0 ; 
             let mut macro_name = String::new() ;
             let mut args: Vec<String> = vec![] ; 
             let mut value  = String::new() ; 
             values.chars().for_each(|c| match c {
-                _ if state == PreprocessorDirectiveParsingState::Value => value.push(c),
-                '(' if state == PreprocessorDirectiveParsingState::Name || state == PreprocessorDirectiveParsingState::AfterName => {brace_level+=1 ; state = PreprocessorDirectiveParsingState::Args ; args.push(String::new()) ; value.push(c)},
-                '(' if brace_level > 0 => {state = PreprocessorDirectiveParsingState::Value ; args.clear() ; value.push(c);}, 
+                _ if state == DirectiveParsingState::Value => value.push(c),
+                '(' if state == DirectiveParsingState::Name || state == DirectiveParsingState::AfterName => {brace_level+=1 ; state = DirectiveParsingState::Args ; args.push(String::new()) ; value.push(c)},
+                '(' if brace_level > 0 => {state = DirectiveParsingState::Value ; args.clear() ; value.push(c);}, 
                 '(' => {brace_level+=1 ; value.push(c) }, 
-                ' ' if state == PreprocessorDirectiveParsingState::Name => state = PreprocessorDirectiveParsingState::AfterName,
+                ' ' if state == DirectiveParsingState::Name => state = DirectiveParsingState::AfterName,
                 ' ' => {},
-                ')' if state == PreprocessorDirectiveParsingState::Name => panic!("Unexpected ')' in macro name"),
+                ')' if state == DirectiveParsingState::Name => panic!("Unexpected ')' in macro name"),
                 ')' if brace_level > 1  => {brace_level-=1 ; value.push(c) ;args.last_mut().unwrap().push(c)  },
-                ')' if state == PreprocessorDirectiveParsingState::Args => {brace_level = brace_level.checked_sub(1).expect("Unmatched ("); state = PreprocessorDirectiveParsingState::Value; value.clear()},
+                ')' if state == DirectiveParsingState::Args => {brace_level = brace_level.checked_sub(1).expect("Unmatched ("); state = DirectiveParsingState::Value; value.clear()},
                 ')' => value.push(c),
                 ',' => args.push(String::new()),
-                _ if state == PreprocessorDirectiveParsingState::Name => macro_name.push(c),
-                _ if state == PreprocessorDirectiveParsingState::AfterName => {state =  PreprocessorDirectiveParsingState::Value; value.push(c)},
+                _ if state == DirectiveParsingState::Name => macro_name.push(c),
+                _ if state == DirectiveParsingState::AfterName => {state =  DirectiveParsingState::Value; value.push(c)},
                 _ => {args.last_mut().unwrap().push(c) ; value.push(c)}, 
             });
             if value.is_empty() {
@@ -195,37 +207,39 @@ fn convert_from_store(directive: &StorePreprocessorDirective) -> PreprocessorDir
                 args.clear();
             }
             
-            PreprocessorDirective::Define { macro_name, macro_args : args, macro_value : value}
-        }
+            Directive::Define { macro_name, macro_args : args, macro_value : value}
+        },
+        ["undef", macro_name] => Directive::Undef { macro_name: (*macro_name).to_string() },
+        ["if", expression_string] => Directive::If { expression: expression_tree_from_string(expression_string.to_string()) },
         x => panic!("Not a valid directive : {x:?}"),
     }
 }
 
-pub fn preprocess_directive(directive: &PreprocessorDirective) -> String {
+pub fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
     println!("Directive: {directive:?}");
     match directive {
-        PreprocessorDirective::Define { .. } => {
-            preprocess_define(directive, &mut PreprocessorState::default())
+        Directive::Define { .. } => {
+            preprocess_define(directive, state)
         }
-        PreprocessorDirective::IfDef { .. } => todo!(),
-        PreprocessorDirective::If { .. } => todo!(),
-        PreprocessorDirective::Include { .. } => todo!(),
-        PreprocessorDirective::Undef { .. } => todo!(),
-        PreprocessorDirective::Elif { .. } => todo!(),
-        PreprocessorDirective::Else => todo!(),
-        PreprocessorDirective::EndIf => todo!(),
-        PreprocessorDirective::Error { .. } => todo!(),
-        PreprocessorDirective::None => todo!(),
+        Directive::IfDef { .. } => todo!(),
+        Directive::If { .. } => todo!(),
+        Directive::Include { .. } => todo!(),
+        Directive::Undef { macro_name } => {state.defines.remove(macro_name); String::new()},
+        Directive::Elif { .. } => todo!(),
+        Directive::Else => todo!(),
+        Directive::EndIf => todo!(),
+        Directive::Error { .. } => todo!(),
+        Directive::None => todo!(),
     }
 }
 
-pub fn preprocess(content: &str, state: &mut PreprocessorState) -> String {
+pub fn preprocess(content: &str, state: &mut State) -> String {
     let processed_file = content
         .lines()
         .map(|line| {
             state.inline_comment = false;
             state.directive_parsing_state = Pips::None;
-            let mut current_directive = StorePreprocessorDirective::default();
+            let mut current_directive = StoreDirective::default();
             let line_string = line.to_string();
             let mut previous_char: char = ' ';
             let preprocessed_line = line_string
@@ -233,14 +247,15 @@ pub fn preprocess(content: &str, state: &mut PreprocessorState) -> String {
                 .map(|c| preprocess_character(c, state, &mut previous_char, &mut current_directive))
                 .collect::<String>()
                 + "\n";
+            println!("Hashmap: {}", format!("{:?}", state.defines).blue());
             match &state.directive_parsing_state {
                 Pips::DirectiveValue(value) => {
                     current_directive.values.push(value.clone());
                     println!("Struct: {current_directive:?}");
-                    preprocess_directive(&convert_from_store(&current_directive)) + "\n"},
+                    preprocess_directive(&convert_from_store(&current_directive), state) + "\n"},
                 Pips::DirectiveName(_) => {
                     println!("Struct: {current_directive:?}");
-                    preprocess_directive(&convert_from_store(&current_directive)) + "\n"
+                    preprocess_directive(&convert_from_store(&current_directive), state) + "\n"
                 },
                 Pips::DirectiveArgs(_) => {
                     panic!("Directive args not closed")
@@ -264,7 +279,7 @@ pub fn preprocess_unit(filepath: PathBuf) -> String {
         .expect("Failed to read the file")
         .read_to_string(&mut content)
         .expect("Failed to convert the file");
-    let mut state = PreprocessorState::default();
+    let mut state = State::default();
     state.current_position.filename = filepath
         .file_name()
         .unwrap()
