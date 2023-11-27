@@ -104,6 +104,11 @@ pub enum PreprocessorToken {
     Macro(String),
 }
 
+fn is_not_operator(c: char) -> bool {
+    const OPERATORS: [char; 12] = [' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>'];
+    !OPERATORS.contains(&c)
+}
+
 fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
     if token_str.is_empty() {
         return None;
@@ -148,18 +153,20 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
             "<<=" => PreprocessorToken::Operator(Operator::ShiftLeftAssign),
 
             "defined" => PreprocessorToken::DefinedOperator,
-            token => {
-                if token.starts_with('\"') && token.ends_with('\"')
-                    || token.starts_with('\'') && token.ends_with('\'')
+            _ => {
+                if token_str.starts_with('\"') && token_str.ends_with('\"')
+                    || token_str.starts_with('\'') && token_str.ends_with('\'')
                 {
                     PreprocessorToken::LiteralString(
-                        token
-                            .get(1..token.len() - 1)
+                        token_str
+                            .get(1..token_str.len() - 1)
                             .expect("Catastrophic failure")
                             .to_string(),
                     )
-                } else {
+                } else if token_str.chars().all(is_not_operator) {
                     PreprocessorToken::Macro(token_str.to_string())
+                } else {
+                    return None;
                 }
             }
         }
@@ -171,19 +178,15 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
 pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
     let mut tokens: Vec<PreprocessorToken> = vec![];
     let mut current_token: String = String::new();
-    string.chars().for_each(|c| match c {
-        _ if c.is_alphabetic() || c.is_alphanumeric() => current_token.push(c),
-        ' ' => {
-            if let Some(token) = token_from_str(&current_token) {
-                tokens.push(token);
-                current_token.clear();
-            }
-        }
-        _ => {
+    string.chars().for_each(|c| {
+        let new_token = current_token.clone() + &String::from(c);
+        if let Some(token) = token_from_str(&new_token) {
+            current_token = new_token;
+        } else if let Some(token) = token_from_str(&current_token) {
+            tokens.push(token);
+            current_token.clear();
             current_token.push(c);
-            if let Some(token) = token_from_str(&current_token) {
-                tokens.push(token);
-            };
+        } else {
             current_token.clear();
         }
     });
