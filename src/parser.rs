@@ -46,8 +46,13 @@ pub enum Operator {
     Plus,
     Minus,
     Not,
-    Eval,
-    Subscript,
+
+    LeftParenthesis,
+    RightParenthesis,
+    LeftBracket,
+    RightBracket,
+    LeftBrace,
+    RightBrace,
 
     // Binary
     Add,
@@ -105,7 +110,9 @@ pub enum PreprocessorToken {
 }
 
 fn is_not_operator(c: char) -> bool {
-    const OPERATORS: [char; 12] = [' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>'];
+    const OPERATORS: [char; 18] = [
+        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']',
+    ];
     !OPERATORS.contains(&c)
 }
 
@@ -113,8 +120,14 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
     if token_str.is_empty() {
         return None;
     }
+    let no_operator = token_str.chars().all(is_not_operator);
+
     let token = if let Ok(number) = token_str.parse::<f32>() {
-        PreprocessorToken::LiteralNumber(number)
+        if no_operator {
+            PreprocessorToken::LiteralNumber(number)
+        } else {
+            return None;
+        }
     } else {
         match token_str {
             "!" => PreprocessorToken::Operator(Operator::Not),
@@ -146,17 +159,25 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
             "^=" => PreprocessorToken::Operator(Operator::XorAssign),
             "&&" => PreprocessorToken::Operator(Operator::And),
             "||" => PreprocessorToken::Operator(Operator::Or),
-            "()" => PreprocessorToken::Operator(Operator::Eval),
-            "[]" => PreprocessorToken::Operator(Operator::Subscript),
             "->" => PreprocessorToken::Operator(Operator::Arrow),
             ">>=" => PreprocessorToken::Operator(Operator::ShiftRightAssign),
             "<<=" => PreprocessorToken::Operator(Operator::ShiftLeftAssign),
+            "(" => PreprocessorToken::Operator(Operator::LeftParenthesis),
+            ")" => PreprocessorToken::Operator(Operator::RightParenthesis),
+            "[" => PreprocessorToken::Operator(Operator::LeftBracket),
+            "]" => PreprocessorToken::Operator(Operator::RightBracket),
+            "{" => PreprocessorToken::Operator(Operator::LeftBrace),
+            "}" => PreprocessorToken::Operator(Operator::RightBrace),
 
             "defined" => PreprocessorToken::DefinedOperator,
             _ => {
-                if token_str.starts_with('\"') && token_str.ends_with('\"')
-                    || token_str.starts_with('\'') && token_str.ends_with('\'')
+                if (token_str.starts_with('\"') && token_str.char_indices().skip(1).all(|(i, c)| c != '\"' || i==(token_str.len()-1)))
+                    || (token_str.starts_with('\'') && token_str.char_indices().skip(1).all(|(i, c)| c != '\'' || i==(token_str.len()-1)))
                 {
+                    // if token_str.starts_with('\"') && token_str.ends_with('\"')
+                    //     || token_str.starts_with('\'') && token_str.ends_with('\'')
+                    // {
+                    println!("Token_str {token_str}");
                     PreprocessorToken::LiteralString(
                         token_str
                             .get(1..token_str.len() - 1)
