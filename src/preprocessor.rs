@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use colored::Colorize;
 
 use crate::expression::ExpressionTree;
+use crate::parser::parse_preprocessor;
 
 
 #[derive(Default, Debug)]
@@ -173,7 +174,7 @@ fn infix_to_postfix(expression: String) -> String {
 
 #[allow(unused)]
 fn expression_tree_from_string(expression_string: String) -> ExpressionTree {
-    let tokens = parse(expression_string);
+    let tokens = parse_preprocessor(&expression_string);
     let posix = infix_to_postfix(expression_string);
     ExpressionTree::Literal { value: String::new() }
 }

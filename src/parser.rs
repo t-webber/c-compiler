@@ -40,19 +40,12 @@ pub enum Keyword {
     While,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operator {
     // Unary
     Plus,
     Minus,
     Not,
-
-    LeftParenthesis,
-    RightParenthesis,
-    LeftBracket,
-    RightBracket,
-    LeftBrace,
-    RightBrace,
 
     // Binary
     Add,
@@ -100,10 +93,21 @@ pub enum Token {
     SpecialSymbol,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub enum Bracing {
+    LeftParenthesis,
+    RightParenthesis,
+    LeftBracket,
+    RightBracket,
+    LeftBrace,
+    RightBrace,
+}
+
+#[derive(Debug, Clone)]
 pub enum PreprocessorToken {
     DefinedOperator,
     Operator(Operator),
+    Bracing(Bracing),
     LiteralString(String),
     LiteralNumber(f32),
     Macro(String),
@@ -162,22 +166,18 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
             "->" => PreprocessorToken::Operator(Operator::Arrow),
             ">>=" => PreprocessorToken::Operator(Operator::ShiftRightAssign),
             "<<=" => PreprocessorToken::Operator(Operator::ShiftLeftAssign),
-            "(" => PreprocessorToken::Operator(Operator::LeftParenthesis),
-            ")" => PreprocessorToken::Operator(Operator::RightParenthesis),
-            "[" => PreprocessorToken::Operator(Operator::LeftBracket),
-            "]" => PreprocessorToken::Operator(Operator::RightBracket),
-            "{" => PreprocessorToken::Operator(Operator::LeftBrace),
-            "}" => PreprocessorToken::Operator(Operator::RightBrace),
+            "(" => PreprocessorToken::Bracing(Bracing::LeftParenthesis),
+            ")" => PreprocessorToken::Bracing(Bracing::RightParenthesis),
+            "[" => PreprocessorToken::Bracing(Bracing::LeftBracket),
+            "]" => PreprocessorToken::Bracing(Bracing::RightBracket),
+            "{" => PreprocessorToken::Bracing(Bracing::LeftBrace),
+            "}" => PreprocessorToken::Bracing(Bracing::RightBrace),
 
             "defined" => PreprocessorToken::DefinedOperator,
             _ => {
                 if (token_str.starts_with('\"') && token_str.char_indices().skip(1).all(|(i, c)| c != '\"' || i==(token_str.len()-1)))
                     || (token_str.starts_with('\'') && token_str.char_indices().skip(1).all(|(i, c)| c != '\'' || i==(token_str.len()-1)))
                 {
-                    // if token_str.starts_with('\"') && token_str.ends_with('\"')
-                    //     || token_str.starts_with('\'') && token_str.ends_with('\'')
-                    // {
-                    println!("Token_str {token_str}");
                     PreprocessorToken::LiteralString(
                         token_str
                             .get(1..token_str.len() - 1)
