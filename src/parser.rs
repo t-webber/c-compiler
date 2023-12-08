@@ -40,7 +40,7 @@ pub enum Keyword {
     While,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     // Unary
     Plus,
@@ -93,7 +93,7 @@ pub enum Token {
     SpecialSymbol,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Bracing {
     LeftParenthesis,
     RightParenthesis,
@@ -103,7 +103,7 @@ pub enum Bracing {
     RightBrace,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PreprocessorToken {
     DefinedOperator,
     Operator(Operator),
@@ -114,8 +114,8 @@ pub enum PreprocessorToken {
 }
 
 fn is_not_operator(c: char) -> bool {
-    const OPERATORS: [char; 18] = [
-        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']',
+    const OPERATORS: [char; 26] = [
+        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']', '=', ',', ';', ':', '?', '~', '#', '\\'
     ];
     !OPERATORS.contains(&c)
 }
@@ -175,8 +175,16 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
 
             "defined" => PreprocessorToken::DefinedOperator,
             _ => {
-                if (token_str.starts_with('\"') && token_str.char_indices().skip(1).all(|(i, c)| c != '\"' || i==(token_str.len()-1)))
-                    || (token_str.starts_with('\'') && token_str.char_indices().skip(1).all(|(i, c)| c != '\'' || i==(token_str.len()-1)))
+                if (token_str.starts_with('\"')
+                    && token_str
+                        .char_indices()
+                        .skip(1)
+                        .all(|(i, c)| c != '\"' || i == (token_str.len() - 1)))
+                    || (token_str.starts_with('\'')
+                        && token_str
+                            .char_indices()
+                            .skip(1)
+                            .all(|(i, c)| c != '\'' || i == (token_str.len() - 1)))
                 {
                     PreprocessorToken::LiteralString(
                         token_str
@@ -184,7 +192,7 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
                             .expect("Catastrophic failure")
                             .to_string(),
                     )
-                } else if token_str.chars().all(is_not_operator) {
+                } else if no_operator {
                     PreprocessorToken::Macro(token_str.to_string())
                 } else {
                     return None;
@@ -201,14 +209,19 @@ pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
     let mut current_token: String = String::new();
     string.chars().for_each(|c| {
         let new_token = current_token.clone() + &String::from(c);
+        // println!("Current = {current_token:?} and new = {new_token:?}");
         if let Some(token) = token_from_str(&new_token) {
             current_token = new_token;
+            // println!("Chose new");
         } else if let Some(token) = token_from_str(&current_token) {
             tokens.push(token);
             current_token.clear();
             current_token.push(c);
+            // println!("Chose current");
         } else {
             current_token.clear();
+            current_token.push(c);
+            // println!("Chose none");
         }
     });
     if let Some(token) = token_from_str(&current_token) {
@@ -216,31 +229,3 @@ pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
     }
     tokens
 }
-
-/*
-Tokens (23)
-
-++
---
->>
-<<
-!=
-==
-+=
--=
-*=
-/=
-%=
-<=
->=
-&=
-|=
-^=
-&&
-||
-()
-[]
-->
->>=
-<<=
- */

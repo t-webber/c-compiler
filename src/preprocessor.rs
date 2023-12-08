@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 use colored::Colorize;
 
-use crate::expression::ExpressionTree;
 use crate::parser::parse_preprocessor;
+use crate::eval::{tokens_to_ast, eval};
 
 
 #[derive(Default, Debug)]
@@ -48,7 +48,7 @@ pub enum Directive {
         macro_name: String,
     },
     If {
-        expression: ExpressionTree,
+        expression: bool,
     },
     Include {
         filename: String,
@@ -79,7 +79,7 @@ pub struct State {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-enum MacroValue {
+pub enum MacroValue {
     String(String),
     Function {
         args: Vec<String>,
@@ -167,19 +167,7 @@ enum DirectiveParsingState {
     Value,
 }
 
-#[allow(unused)]
-fn infix_to_postfix(expression: String) -> String {
-    todo!()    
-}
-
-#[allow(unused)]
-fn expression_tree_from_string(expression_string: String) -> ExpressionTree {
-    let tokens = parse_preprocessor(&expression_string);
-    let posix = infix_to_postfix(expression_string);
-    ExpressionTree::Literal { value: String::new() }
-}
-
-fn convert_from_store(directive: &StoreDirective) -> Directive {
+fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directive {
     match directive.values.iter().map(|s| s.as_str().trim()).collect::<Vec<&str>>().as_slice() {
         ["define", values] => {
             let mut state = DirectiveParsingState::Name ;
@@ -211,7 +199,7 @@ fn convert_from_store(directive: &StoreDirective) -> Directive {
             Directive::Define { macro_name, macro_args : args, macro_value : value}
         },
         ["undef", macro_name] => Directive::Undef { macro_name: (*macro_name).to_string() },
-        ["if", expression_string] => Directive::If { expression: expression_tree_from_string(expression_string.to_string()) },
+        ["if", expression_string] => { let ast = tokens_to_ast(parse_preprocessor(expression_string)); println!("ast: {ast:?}"); Directive::If { expression: eval(ast, &mut state.defines)!=0 }},
         x => panic!("Not a valid directive : {x:?}"),
     }
 }
@@ -223,7 +211,7 @@ pub fn preprocess_directive(directive: &Directive, state: &mut State) -> String 
             preprocess_define(directive, state)
         }
         Directive::IfDef { .. } => todo!(),
-        Directive::If { .. } => todo!(),
+        Directive::If { expression } => {println!("Expression: {expression}"); String::from(if *expression {"expression vraie"} else {"expression fausse"})},
         Directive::Include { .. } => todo!(),
         Directive::Undef { macro_name } => {state.defines.remove(macro_name); String::new()},
         Directive::Elif { .. } => todo!(),
@@ -253,10 +241,10 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
                 Pips::DirectiveValue(value) => {
                     current_directive.values.push(value.clone());
                     println!("Struct: {current_directive:?}");
-                    preprocess_directive(&convert_from_store(&current_directive), state) + "\n"},
+                    preprocess_directive(&convert_from_store(&current_directive, state), state) + "\n"},
                 Pips::DirectiveName(_) => {
                     println!("Struct: {current_directive:?}");
-                    preprocess_directive(&convert_from_store(&current_directive), state) + "\n"
+                    preprocess_directive(&convert_from_store(&current_directive, state), state) + "\n"
                 },
                 Pips::DirectiveArgs(_) => {
                     panic!("Directive args not closed")
