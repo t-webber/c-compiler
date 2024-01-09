@@ -8,6 +8,7 @@
 #if !+(2+3)
 #if 1++
 
+int remy = 10;
 int a = 5;
 
 int main(void) {
