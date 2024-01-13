@@ -81,6 +81,8 @@ pub enum Operator {
 
     ShiftLeftAssign,
     ShiftRightAssign,
+
+    Defined
 }
 
 #[derive(Debug)]
@@ -105,7 +107,6 @@ pub enum Bracing {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreprocessorToken {
-    DefinedOperator,
     Operator(Operator),
     Bracing(Bracing),
     LiteralString(String),
@@ -173,7 +174,7 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
             "{" => PreprocessorToken::Bracing(Bracing::LeftBrace),
             "}" => PreprocessorToken::Bracing(Bracing::RightBrace),
 
-            "defined" => PreprocessorToken::DefinedOperator,
+            "defined" => PreprocessorToken::Operator(Operator::Defined),
             _ => {
                 if (token_str.starts_with('\"')
                     && token_str

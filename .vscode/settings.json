@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "stdio.h": "c"
+        "*.ejs": "ejs",
+        "stdio.h": "c",
+        "libc-header-start.h": "c",
+        "stddef.h": "c"
     }
 }
