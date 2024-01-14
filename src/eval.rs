@@ -26,20 +26,26 @@ fn tokens_to_ast_impl(tokens: &mut Iter<'_, PreprocessorToken>, acc: Preprocesso
         match token {
             PreprocessorToken::Operator(operator) => 
                 match operator {
-                        Operator::Plus|Operator::Minus|Operator::Not|Operator::Increment|Operator::Decrement
+                    Operator::Plus|Operator::Minus|Operator::Not|Operator::Increment|Operator::Decrement
                     |Operator::AddAssign|Operator::SubAssign|Operator::MulAssign|Operator::DivAssign|Operator::ModAssign
                     |Operator::OrAssign|Operator::AndAssign|Operator::XorAssign|Operator::Arrow|Operator::ShiftLeftAssign
                     |Operator::ShiftRightAssign|Operator::Defined => {
                         if acc == PreprocessorAst::Empty {
-                            let next = tokens_to_ast_impl(tokens, PreprocessorAst::Empty, true);
-                            PreprocessorAst::UnaryOperator { operator: operator.clone(), child: Box::new(next) }
+                            let under_unary = tokens_to_ast_impl(tokens, PreprocessorAst::Empty,true);
+                            let unary = PreprocessorAst::UnaryOperator { operator: operator.clone(), child: Box::new(under_unary) };
+                            if stop_at_block {
+                                unary
+                            } else {
+                                tokens_to_ast_impl(tokens, unary, false)
+                            }
+                            // tokens_to_ast_impl(tokens, unary, false)
                         } else {
-                          panic!("Expected only one argument for unary operator")
+                            panic!("Expected only one argument for unary operator")
                       }},
-                    _ => PreprocessorAst::BinaryOperator { operator: operator.clone(), left : Box::new(acc), right: Box::new(tokens_to_ast_impl(tokens, PreprocessorAst::Empty, false)) },
+                    _ => PreprocessorAst::BinaryOperator { operator: operator.clone(), left : Box::new(acc), right: Box::new(tokens_to_ast_impl(tokens, PreprocessorAst::Empty, stop_at_block)) },
                 }
             PreprocessorToken::Bracing(bracing) => match bracing {
-                Bracing::LeftParenthesis => {let bidule = tokens_to_ast_impl(tokens, PreprocessorAst::Empty, false); tokens_to_ast_impl(tokens, bidule, false)},
+                Bracing::LeftParenthesis => {let next = tokens_to_ast_impl(tokens, PreprocessorAst::Empty, stop_at_block); tokens_to_ast_impl(tokens, next, false)},
                 Bracing::RightParenthesis => acc,
                 _ => tokens_to_ast_impl(tokens, PreprocessorAst::Leaf(token.clone()), false)
             }

@@ -1,4 +1,4 @@
-char x[] = "Should be present";
+char x[] = "Should NOT be present";
 int remy = 10;
 int a = 5;
 int main(void) {

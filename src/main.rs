@@ -12,10 +12,10 @@ mod eval;
 use crate::eval::{eval, tokens_to_ast};
 use preprocessor::State;
 
-fn main() -> std::io::Result<()> {
-    run_main("fichier.c")
+fn main() {
+    // run_main("fichier.c")
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
-    // test_parser("MACRO1 MACRO2")
+    test_parser("!(defined _FILE_OFFSET_BITS) || _FILE_OFFSET_BITS");
 }
 
 #[allow(unused)]
@@ -34,8 +34,8 @@ fn test_parser(expression: &str) {
     let tokens = parse_preprocessor(&input);
     let ast = tokens_to_ast(&tokens.clone());
     let result = eval(&ast, &State::default());
-    println!("{tokens:?}");
-    println!("{input:?}");
-    println!("{ast:?}");
-    println!("{result:?}");
+    println!("{tokens:?}\n");
+    println!("{input:?}\n");
+    println!("{ast:?}\n");
+    println!("{result:?}\n");
 }
