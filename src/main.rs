@@ -1,16 +1,16 @@
 // #![allow(unused)]
-use std::{collections::HashMap, path::PathBuf};
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::PathBuf;
 mod preprocessor;
-
-
+mod tools;
 
 // mod expression;
 mod parser;
 use parser::parse_preprocessor;
 mod eval;
 use crate::eval::{eval, tokens_to_ast};
+use preprocessor::State;
 
 fn main() -> std::io::Result<()> {
     run_main("fichier.c")
@@ -29,14 +29,13 @@ fn run_main(path: &str) -> std::io::Result<()> {
 }
 
 #[allow(unused)]
-fn test_parser(expression: &str) -> std::io::Result<()> {
+fn test_parser(expression: &str) {
     let input = String::from(expression);
     let tokens = parse_preprocessor(&input);
     let ast = tokens_to_ast(&tokens.clone());
-    let result = eval(&ast, &mut HashMap::default());
+    let result = eval(&ast, &State::default());
     println!("{tokens:?}");
     println!("{input:?}");
     println!("{ast:?}");
     println!("{result:?}");
-    Ok(())
 }

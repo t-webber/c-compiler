@@ -1,8 +1,8 @@
-char x[] = "Should be present"
+char x[] = "Should be present";
 int remy = 10;
 int a = 5;
 int main(void) {
-    char x = "Hello Worldy!";
+    char x = "Hello World!";
     printf("%s", x);
     return 0;
 }

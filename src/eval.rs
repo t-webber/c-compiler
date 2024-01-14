@@ -1,7 +1,8 @@
-use std::{collections::HashMap, slice::Iter};
+use std::slice::Iter;
 
 use crate::parser::{parse_preprocessor, Bracing, Operator, PreprocessorToken};
-use crate::preprocessor::MacroValue;
+use crate::preprocessor::{MacroValue, State};
+use crate::tools::compilation_error;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum PreprocessorAst {
@@ -25,7 +26,7 @@ fn tokens_to_ast_impl(tokens: &mut Iter<'_, PreprocessorToken>, acc: Preprocesso
         match token {
             PreprocessorToken::Operator(operator) => 
                 match operator {
-                    Operator::Plus|Operator::Minus|Operator::Not|Operator::Increment|Operator::Decrement
+                        Operator::Plus|Operator::Minus|Operator::Not|Operator::Increment|Operator::Decrement
                     |Operator::AddAssign|Operator::SubAssign|Operator::MulAssign|Operator::DivAssign|Operator::ModAssign
                     |Operator::OrAssign|Operator::AndAssign|Operator::XorAssign|Operator::Arrow|Operator::ShiftLeftAssign
                     |Operator::ShiftRightAssign|Operator::Defined => {
@@ -56,10 +57,10 @@ pub fn tokens_to_ast(tokens: &[PreprocessorToken]) -> PreprocessorAst {
 }
 
 #[rustfmt::skip]
-pub fn eval(ast: &PreprocessorAst, macros: &mut HashMap<String, MacroValue>) -> i32 {
+pub fn eval(ast: &PreprocessorAst, state: &State) -> i32 {
     match ast {
         PreprocessorAst::Empty => 0,
-        PreprocessorAst::BinaryOperator { operator, left, right } => {let (x, y) = (eval(left, macros), eval(right, macros)); match operator {
+        PreprocessorAst::BinaryOperator { operator, left, right } => {let (x, y) = (eval(left, state), eval(right, state)); match operator {
             Operator::Plus|Operator::Minus|Operator::Not|Operator::Increment|Operator::Decrement
             | Operator::AddAssign|Operator::SubAssign|Operator::MulAssign|Operator::DivAssign|Operator::ModAssign
             | Operator::OrAssign|Operator::AndAssign|Operator::XorAssign|Operator::Arrow
@@ -85,7 +86,7 @@ pub fn eval(ast: &PreprocessorAst, macros: &mut HashMap<String, MacroValue>) -> 
             Operator::GreaterEqual => i32::from(x >= y),
         }},
         PreprocessorAst::UnaryOperator { operator, child } => {
-            let x = eval(child, macros); match operator {
+            let x = eval(child, state); match operator {
                 Operator::Add|Operator::Sub|Operator::Mul|Operator::Div|Operator::Mod
                 | Operator::BitwiseAnd|Operator::BitwiseOr|Operator::BitwiseXor
                 | Operator::And|Operator::Or|Operator::Xor|Operator::NotEqual|Operator::Eequal
@@ -94,12 +95,13 @@ pub fn eval(ast: &PreprocessorAst, macros: &mut HashMap<String, MacroValue>) -> 
                 Operator::Defined => 
                     if let PreprocessorAst::Leaf(macro_token) = child.as_ref() {
                         if let PreprocessorToken::Macro(macro_name) = &macro_token {
-                            i32::from(macros.contains_key(macro_name))
+                            i32::from(state.defines.contains_key(macro_name))
                         } else {
-                            panic!("Defined child {:?} isn't a macro", &macro_token)
+                            panic!("{}", compilation_error(&state.current_position, &format!("Defined child {:?} isn't a macro", &macro_token)))
                         }
                     } else {
-                        panic!("Expected a leaf as defined child got {:?}", child.as_ref())
+                        println!("{}", compilation_error(&state.current_position, &format!("Expected a leaf as defined child got {:?}", child.as_ref())));
+                        panic!("{}", compilation_error(&state.current_position, &format!("({ast:?})")))
                     }
                 Operator::Plus => x,
                 Operator::Minus => -x,
@@ -113,10 +115,10 @@ pub fn eval(ast: &PreprocessorAst, macros: &mut HashMap<String, MacroValue>) -> 
         PreprocessorAst::Leaf(leaf) => match leaf {
             PreprocessorToken::Macro(macro_name) => {
                 let default = MacroValue::String(String::from("0"));
-                let macro_value = macros.get(macro_name).unwrap_or(&default);
+                let macro_value = state.defines.get(macro_name).unwrap_or(&default);
                 match macro_value {
-                    MacroValue::String(macro_string) => eval(&tokens_to_ast(&parse_preprocessor(macro_string)), macros),
-                    MacroValue::Function { .. } => panic!("Macro with arguments are unsupported"),
+                    MacroValue::String(macro_string) => eval(&tokens_to_ast(&parse_preprocessor(macro_string)), state),
+                    MacroValue::Function { .. } => panic!("{}", compilation_error(&state.current_position, "Macro with arguments are unsupported")),
                 }
             },
             #[allow(clippy::cast_possible_truncation)]
