@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 # colored = "2.0.4"
 
-[profile.dev.build-override]
-opt-level = 3
+# [profile.dev.build-override]
+# opt-level = 3

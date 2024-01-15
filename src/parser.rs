@@ -1,51 +1,46 @@
-#![allow(unused)]
-use std::{
-    fmt::Debug,
-    ops::{AddAssign, MulAssign, SubAssign},
-};
-
-#[derive(Debug)]
-pub enum Keyword {
-    Auto,
-    Double,
-    Int,
-    Struct,
-    Break,
-    Else,
-    Long,
-    Switch,
-    Case,
-    Enum,
-    Register,
-    Typedef,
-    Char,
-    Extern,
-    Return,
-    Union,
-    Const,
-    Float,
-    Short,
-    Unsigned,
-    Continue,
-    For,
-    Signed,
-    Void,
-    Default,
-    Goto,
-    Sizeof,
-    Volatile,
-    Do,
-    If,
-    Static,
-    While,
-}
+// #[derive(Debug)]
+// pub enum Keyword {
+//     Auto,
+//     Double,
+//     Int,
+//     Struct,
+//     Break,
+//     Else,
+//     Long,
+//     Switch,
+//     Case,
+//     Enum,
+//     Register,
+//     Typedef,
+//     Char,
+//     Extern,
+//     Return,
+//     Union,
+//     Const,
+//     Float,
+//     Short,
+//     Unsigned,
+//     Continue,
+//     For,
+//     Signed,
+//     Void,
+//     Default,
+//     Goto,
+//     Sizeof,
+//     Volatile,
+//     Do,
+//     If,
+//     Static,
+//     While,
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     // Unary
-    Plus,
-    Minus,
+    // Plus,
+    // Minus,
     Not,
+    BitwiseNot,
 
     // Binary
     Add,
@@ -53,12 +48,12 @@ pub enum Operator {
     Mul,
     Div,
     Mod,
+    Conditional,
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
     And,
     Or,
-    Xor,
     ShiftLeft,
     ShiftRight,
     Increment,
@@ -77,23 +72,156 @@ pub enum Operator {
     OrAssign,
     AndAssign,
     XorAssign,
-    Arrow,
 
     ShiftLeftAssign,
     ShiftRightAssign,
 
-    Defined
+    Defined,
 }
 
-#[derive(Debug)]
-pub enum Token {
-    Keyword(Keyword),
-    Operator(Operator),
-    Identifier,
-    Constant,
-    String,
-    SpecialSymbol,
+// enum Associativity {
+//     LeftToRight,
+//     RightToLeft,
+// }
+
+impl Operator {
+    pub fn max_precedence() -> u32 {
+        14
+    }
+
+    pub fn precedence(&self) -> u32 {
+        match self {
+            Operator::Defined => 0,
+
+            // Operator::Increment => 1,
+            // Operator::Decrement => 1,
+            // ()
+            // []
+            // . ->
+            // (type){elt}
+            //
+            // prefix increment / decrement
+            Operator::Plus => 2,
+            Operator::Minus => 2,
+            Operator::Not => 2,
+            Operator::BitwiseNot => 2,
+            // (cast)
+            // * & sizeof _alignof
+            //
+            Operator::Mul => 3,
+            Operator::Div => 3,
+            Operator::Mod => 3,
+            //
+            Operator::Add => 4,
+            Operator::Sub => 4,
+            //
+            Operator::ShiftLeft => 5,
+            Operator::ShiftRight => 5,
+            //
+            Operator::LessThan => 6,
+            Operator::LessEqual => 6,
+            Operator::GreaterThan => 6,
+            Operator::GreaterEqual => 6,
+            //
+            Operator::Eequal => 7,
+            Operator::NotEqual => 7,
+
+            Operator::BitwiseAnd => 8,
+
+            Operator::BitwiseXor => 9,
+
+            Operator::BitwiseOr => 10,
+
+            Operator::And => 11,
+
+            Operator::Or => 12,
+
+            Operator::Conditional => 13,
+
+            Operator::AddAssign => 14,
+            Operator::SubAssign => 14,
+            Operator::MulAssign => 14,
+            Operator::DivAssign => 14,
+            Operator::ModAssign => 14,
+            Operator::OrAssign => 14,
+            Operator::AndAssign => 14,
+            Operator::XorAssign => 14,
+            Operator::ShiftLeftAssign => 14,
+            Operator::ShiftRightAssign => 14,
+        }
+    }
+
+    // pub fn associativity(&self) -> Associativity {
+    //     match self {
+    //         Operator::Defined => Associativity::LeftToRight,
+
+    //         Operator::Increment => Associativity::LeftToRight,
+    //         Operator::Decrement => Associativity::LeftToRight,
+    //         // ()
+    //         // []
+    //         // . ->
+    //         // (type){elt}
+
+    //         // prefix increment / decrement
+    //         Operator::Plus => Associativity::RightToLeft,
+    //         Operator::Minus => Associativity::RightToLeft,
+    //         Operator::Not => Associativity::RightToLeft,
+    //         Operator::BitwiseNot => Associativity::RightToLeft,
+    //         // (cast)
+    //         // * & sizeof _alignof
+    //         Operator::Mul => Associativity::LeftToRight,
+    //         Operator::Div => Associativity::LeftToRight,
+    //         Operator::Mod => Associativity::LeftToRight,
+
+    //         Operator::Add => Associativity::LeftToRight,
+    //         Operator::Sub => Associativity::LeftToRight,
+
+    //         Operator::ShiftLeft => Associativity::LeftToRight,
+    //         Operator::ShiftRight => Associativity::LeftToRight,
+
+    //         Operator::LessThan => Associativity::LeftToRight,
+    //         Operator::LessEqual => Associativity::LeftToRight,
+    //         Operator::GreaterThan => Associativity::LeftToRight,
+    //         Operator::GreaterEqual => Associativity::LeftToRight,
+
+    //         Operator::Eequal => Associativity::LeftToRight,
+    //         Operator::NotEqual => Associativity::LeftToRight,
+
+    //         Operator::BitwiseAnd => Associativity::LeftToRight,
+
+    //         Operator::BitwiseXor => Associativity::LeftToRight,
+
+    //         Operator::BitwiseOr => Associativity::LeftToRight,
+
+    //         Operator::And => Associativity::LeftToRight,
+
+    //         Operator::Or => Associativity::LeftToRight,
+
+    //         Operator::Conditional => Associativity::RightToLeft,
+
+    //         Operator::AddAssign => Associativity::RightToLeft,
+    //         Operator::SubAssign => Associativity::RightToLeft,
+    //         Operator::MulAssign => Associativity::RightToLeft,
+    //         Operator::DivAssign => Associativity::RightToLeft,
+    //         Operator::ModAssign => Associativity::RightToLeft,
+    //         Operator::OrAssign => Associativity::RightToLeft,
+    //         Operator::AndAssign => Associativity::RightToLeft,
+    //         Operator::XorAssign => Associativity::RightToLeft,
+    //         Operator::ShiftLeftAssign => Associativity::RightToLeft,
+    //         Operator::ShiftRightAssign => Associativity::RightToLeft,
+    //     }
+    // }
 }
+
+// #[derive(Debug)]
+// pub enum Token {
+//     Keyword(Keyword),
+//     Operator(Operator),
+//     Identifier,
+//     Constant,
+//     String,
+//     SpecialSymbol,
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Bracing {
@@ -106,17 +234,25 @@ pub enum Bracing {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum NonOpSymbol {
+    Interrogation,
+    Colon,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum PreprocessorToken {
     Operator(Operator),
     Bracing(Bracing),
     LiteralString(String),
     LiteralNumber(f32),
     Macro(String),
+    NonOpSymbol(NonOpSymbol),
 }
 
 fn is_not_operator(c: char) -> bool {
     const OPERATORS: [char; 26] = [
-        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']', '=', ',', ';', ':', '?', '~', '#', '\\'
+        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']',
+        '=', ',', ';', ':', '?', '~', '#', '\\',
     ];
     !OPERATORS.contains(&c)
 }
@@ -136,9 +272,12 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
     } else {
         match token_str {
             "!" => PreprocessorToken::Operator(Operator::Not),
+            "?" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Interrogation),
+            ":" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon),
             "+" => PreprocessorToken::Operator(Operator::Add),
             "-" => PreprocessorToken::Operator(Operator::Sub),
             "*" => PreprocessorToken::Operator(Operator::Mul),
+            "~" => PreprocessorToken::Operator(Operator::BitwiseNot),
             "/" => PreprocessorToken::Operator(Operator::Div),
             "%" => PreprocessorToken::Operator(Operator::Mod),
             "&" => PreprocessorToken::Operator(Operator::BitwiseAnd),
@@ -164,7 +303,6 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
             "^=" => PreprocessorToken::Operator(Operator::XorAssign),
             "&&" => PreprocessorToken::Operator(Operator::And),
             "||" => PreprocessorToken::Operator(Operator::Or),
-            "->" => PreprocessorToken::Operator(Operator::Arrow),
             ">>=" => PreprocessorToken::Operator(Operator::ShiftRightAssign),
             "<<=" => PreprocessorToken::Operator(Operator::ShiftLeftAssign),
             "(" => PreprocessorToken::Bracing(Bracing::LeftParenthesis),
@@ -211,7 +349,7 @@ pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
     string.chars().for_each(|c| {
         let new_token = current_token.clone() + &String::from(c);
         // println!("Current = {current_token:?} and new = {new_token:?}");
-        if let Some(token) = token_from_str(&new_token) {
+        if let Some(_) = token_from_str(&new_token) {
             current_token = new_token;
             // println!("Chose new");
         } else if let Some(token) = token_from_str(&current_token) {

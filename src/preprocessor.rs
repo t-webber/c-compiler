@@ -6,14 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::eval::{eval, tokens_to_ast};
 use crate::parser::parse_preprocessor;
-
-#[derive(Default, Debug)]
-pub struct FilePosition {
-    pub line: u32,
-    pub col: u32,
-    pub filename: String,
-    pub filepath: String,
-}
+use crate::tools::{compilation_error, Error, FilePosition};
 
 /// Preprocessor Directive Parsing State
 ///
@@ -77,18 +70,27 @@ pub struct State {
     inline_comment: bool,
     directive_parsing: Pips,
     comment_unclosed_positon: Vec<FilePosition>,
-    pub current_position: FilePosition,
     pub defines: HashMap<String, MacroValue>,
-    writing_if: bool,
+    if_writing: bool,
     if_level: u32,
+    include_stack: Vec<FilePosition>,
+    pub current_position: FilePosition,
 }
 
 impl State {
     fn new_file(&mut self, filename: String, filepath: String) {
-        self.current_position.col = 0;
-        self.current_position.line = 0;
+        self.include_stack.push(self.current_position.clone());
+
         self.current_position.filename = filename;
         self.current_position.filepath = filepath;
+        self.current_position.col = 0;
+        self.current_position.line = 0;
+        self.if_level = 0;
+        self.if_writing = true;
+    }
+
+    fn end_file(&mut self) {
+        self.include_stack.pop();
     }
 }
 
@@ -152,7 +154,7 @@ pub fn preprocess_character(c: char, state: &mut State, previous_char: &mut char
             },
         _ => { deal_with_c(c, state, current_directive) }
     };
-    if state.writing_if {
+    if state.if_writing {
         character
     } else {
         String::new()
@@ -184,11 +186,13 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
         PathBuf::from("/usr/local/include/"),
         PathBuf::from("/usr/include/x86_64-linux-gnu/"),
     ];
-    state.current_position.filename = filename.clone();
     for place in places {
         let filepath = place.join(Path::new(&filename));
         if filepath.exists() {
-            state.current_position.filepath = String::from(filepath.as_os_str().to_str().unwrap());
+            state.new_file(
+                filename.clone(),
+                String::from(filepath.as_os_str().to_str().unwrap()),
+            );
             return File::open(filepath).expect("Failed to open file from local directory");
         }
     }
@@ -214,6 +218,7 @@ enum DirectiveParsingState {
     Value,
 }
 
+#[rustfmt::skip]
 fn convert_define_from_store(values: &&str) -> Directive {
     let mut state = DirectiveParsingState::Name;
     let mut brace_level: usize = 0;
@@ -222,14 +227,12 @@ fn convert_define_from_store(values: &&str) -> Directive {
     let mut value = String::new();
     values.chars().for_each(|c| match c {
         _ if state == DirectiveParsingState::Value => value.push(c),
-        '(' if state == DirectiveParsingState::Name
-            || state == DirectiveParsingState::AfterName =>
-        {
-            brace_level += 1;
-            state = DirectiveParsingState::Args;
-            args.push(String::new());
-            value.push(c);
-        }
+        '(' if state == DirectiveParsingState::Name || state == DirectiveParsingState::AfterName => {
+                    brace_level += 1;
+                    state = DirectiveParsingState::Args;
+                    args.push(String::new());
+                    value.push(c);
+                }
         '(' if brace_level > 0 => {
             state = DirectiveParsingState::Value;
             args.clear();
@@ -281,6 +284,7 @@ fn convert_define_from_store(values: &&str) -> Directive {
     }
 }
 
+#[rustfmt::skip]
 fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directive {
     match directive
         .values
@@ -294,13 +298,13 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
             macro_name: String::from(*macro_name),
         },
         ["if", expression_string] => {
-            let ast = tokens_to_ast(&parse_preprocessor(expression_string));
+            let ast = tokens_to_ast(&parse_preprocessor(expression_string), &state.current_position);
             Directive::If {
                 expression: eval(&ast, state) != 0,
             }
         }
         ["elif", expression_string] => {
-            let ast = tokens_to_ast(&parse_preprocessor(expression_string));
+            let ast = tokens_to_ast(&parse_preprocessor(expression_string), &state.current_position);
             Directive::Elif {
                 expression: eval(&ast, state) != 0,
             }
@@ -333,7 +337,8 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
     }
 }
 
-pub fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
+#[rustfmt::skip]
+fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
     // println!("Directive: {directive:?}");
     if state.if_level > 0 {
         match directive {
@@ -344,7 +349,11 @@ pub fn preprocess_directive(directive: &Directive, state: &mut State) -> String 
                     .expect("We're indeniably fucked");
             }
             Directive::Else { .. } | Directive::Elif { .. } => (),
-            _ if state.writing_if => (),
+            Directive::If { .. } => {
+                state.if_level += 1;
+                return String::new();
+            },
+            _ if state.if_writing => (),
             _ => return String::new(),
         }
     }
@@ -352,25 +361,25 @@ pub fn preprocess_directive(directive: &Directive, state: &mut State) -> String 
         Directive::Define { .. } => preprocess_define(directive, state),
         Directive::IfDef { macro_name } => {
             state.if_level += 1;
-            state.writing_if = state.defines.contains_key(macro_name);
+            state.if_writing = state.defines.contains_key(macro_name);
             String::new()
         }
         Directive::IfnDef { macro_name } => {
             state.if_level += 1;
-            state.writing_if = !state.defines.contains_key(macro_name);
+            state.if_writing = !state.defines.contains_key(macro_name);
             String::new()
         }
         Directive::If { expression } => {
             state.if_level += 1;
-            state.writing_if = *expression;
+            state.if_writing = *expression;
             String::new()
         }
         Directive::Elif { expression } => {
-            if state.writing_if {
-                state.writing_if = false;
+            if state.if_writing {
+                state.if_writing = false;
                 String::new()
             } else {
-                state.writing_if = *expression;
+                state.if_writing = *expression;
                 String::new()
             }
         }
@@ -380,25 +389,27 @@ pub fn preprocess_directive(directive: &Directive, state: &mut State) -> String 
             String::new()
         }
         Directive::Else => {
-            state.writing_if = !state.writing_if;
+            state.if_writing = (!state.if_writing) && state.if_level==1;
             String::new()
         }
         Directive::EndIf => {
-            state.writing_if = true;
+            state.if_writing = true;
             String::new()
         }
         Directive::Error { message } => {
-            panic!("Encountered preprocessor error: {message}")
+            dbg!("{:?}\n", &state);
+            panic!("{}", compilation_error(&state.current_position, Error::DirectiveError(message)))
         }
         Directive::Warning { message } => {
-            eprintln!("Encountered preprocessor warning: {message}");
+            eprintln!("{}", compilation_error(&state.current_position, Error::DirectiveWarning(message)));
             String::new()
         }
         Directive::Pragma { message } => {
-            eprintln!("Encountered a pragma directive, not supported yet ({message})");
+            eprintln!("{}", compilation_error(&state.current_position, Error::DirectiveNotImplemented(message)));
             String::new()
         }
-        Directive::None => panic!("Missing directive name after #"),
+        Directive::None => 
+            panic!("{}", compilation_error(&state.current_position, Error::DirectiveNameMissing)),
     }
 }
 
@@ -421,8 +432,8 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
                 .push_str(trimed_line.trim_start());
         } else {
             lines.push((line_number, String::from(trimed_line)));
-            line_number += 1;
         }
+        line_number += 1;
         previous_line_escaped = escaped;
     }
 
@@ -474,7 +485,100 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
         "/* unmatched",
         state.comment_level.to_string().as_str()
     );
+    state.end_file();
     processed_file
+}
+
+fn add_default_macro(state: &mut State) {
+    let macros = &[
+        ("__FILE__", "forgotten"),
+        ("__LINE__", "1"), // mut
+        ("__DATE__", "forgotten"),
+        ("__TIME__", "forgotten"),
+        ("__STDC__", "1"),
+        ("__STDC_VERSION__", "199910L"),
+        ("__STDC_HOSTED__", "1"),
+        //
+        ("__COUNTER__", "0"),
+        ("__GNUC__", "10"),
+        ("__GNUC_MINOR__", "3"),
+        ("__GNUC_PATCHLEVEL__", "0"),
+        ("__GNUG__", "0"),
+        ("__FILE_NAME__", "forgotten"), // mut
+        ("__INCLUDE_LEVEL__", "0"),     // mut
+        ("__VERSION__", "1.0.0"),
+        ("__GNUC_GNU_INLINE", "1"),
+        //
+        ("__STDC_NO_ATOMICS__", "1"),
+        ("__STDC_NO_COMPLEX__", "1"),
+        ("__STDC_NO_THREADS__", "1"),
+        ("__STDC_NO_VLA__", "1"),
+        ("__STDC_MB_MIGHT_NEQ_WC__", "1"),
+        ("__STDC_ISO_10646__", "201706L"),
+        ("__STDC_IEC_559__", "1"),
+        ("__STDC_IEC_559_COMPLEX__", "1"),
+        ("__STDC_LIB_EXT1__", "201112L"),
+        ("__STDC_NO_THREADS__", "1"),
+        ("__STDC_NO_VLA__", "1"),
+        ("__STDC_UTF_16__", "1"),
+        ("__STDC_UTF_32__", "1"),
+        ("__STDC_VERSION__", "201710L"),
+        ("__STDCPP_STRICT_POINTER_SAFETY__", "1"),
+        ("__STDCPP_THREADS__", "1"),
+        ("__STDCPP_UTF_16__", "1"),
+        ("__STDCPP_UTF_32__", "1"),
+        ("__STDC_HOSTED__", "1"),
+        ("__STDC_NO_ATOMICS__", "1"),
+        ("__STDC_NO_COMPLEX__", "1"),
+        ("__STDC_NO_THREADS__", "1"),
+        ("__STDC_NO_VLA__", "1"),
+        ("__STDC_MB_MIGHT_NEQ_WC__", "1"),
+        ("__STDC_ISO_10646__", "201706L"),
+        ("__STDC_IEC_559__", "1"),
+        ("__STDC_IEC_559_COMPLEX__", "1"),
+        ("__STDC_LIB_EXT1__", "201112L"),
+        ("__STDC_NO_THREADS__", "1"),
+        ("__STDC_NO_VLA__", "1"),
+        ("__STDC_UTF_16__", "1"),
+        ("__STDC_UTF_32__", "1"),
+        ("__STDC_VERSION__", "201710L"),
+        ("__STDCPP_STRICT_POINTER_SAFETY__", "1"),
+        ("__STDCPP_THREADS__", "1"),
+        ("__STDCPP_UTF_16__", "1"),
+        ("__STDCPP_UTF_32__", "1"),
+        ("__STDC_HOSTED__", "1"),
+        ("__STDC_NO_ATOMICS__", "1"),
+        ("__STDC_NO_COMPLEX__", "1"),
+        ("__STDC_NO_THREADS__", "1"),
+        ("__STDC_NO_VLA__", "1"),
+        ("__GNUC_RH_RELEASE__", "1"),
+        ("__GXX_ABI_VERSION", "1014"),
+        ("__SCHAR_MAX__", "127"),
+        ("__SHRT_MAX__", "32767"),
+        ("__INT_MAX__", "2147483647"),
+        ("__LONG_MAX__", "9223372036854775807L"),
+        ("__LONG_LONG_MAX__", "9223372036854775807LL"),
+        ("__WCHAR_MAX__", "2147483647"),
+        ("__WCHAR_MIN__", "-2147483648"),
+        ("__WINT_MAX__", "2147483647"),
+        ("__WINT_MIN__", "-2147483648"),
+        ("__PTRDIFF_MAX__", "9223372036854775807L"),
+        ("__SIZE_MAX__", "18446744073709551615UL"),
+        ("__CHAR_BIT__", "8"),
+        ("__CHAR_MAX__", "127"),
+        ("__CHAR_MIN__", "-128"),
+        ("__UCHAR_MAX__", "255"),
+        ("__SHRT_MIN__", "-32768"),
+        ("__INT_MIN__", "-2147483648"),
+        ("__LONG_MIN__", "-9223372036854775808L"),
+        ("__LONG_LONG_MIN__", "-9223372036854775808LL"),
+    ];
+    macros.iter().for_each(|(name, value)| {
+        state.defines.insert(
+            String::from(*name),
+            MacroValue::String(String::from(*value)),
+        );
+    });
 }
 
 pub fn preprocess_unit(filepath: PathBuf) -> String {
@@ -484,9 +588,10 @@ pub fn preprocess_unit(filepath: PathBuf) -> String {
         .read_to_string(&mut content)
         .expect("Failed to convert the file");
     let mut state = State {
-        writing_if: true,
+        if_writing: true,
         ..Default::default()
     };
+    add_default_macro(&mut state);
     state.new_file(
         filepath
             .file_name()
