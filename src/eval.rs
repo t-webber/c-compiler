@@ -1,9 +1,8 @@
-use std::slice::Iter;
-
-use crate::parser::{parse_preprocessor, Bracing, NonOpSymbol, Operator, PreprocessorToken};
+use crate::parser::{parse_preprocessor, Operator, PreprocessorToken};
 use crate::preprocessor::{MacroValue, State};
-use crate::tools::{compilation_error, Error, FilePosition};
+use crate::tools::{FilePosition, PreprocessorError};
 
+#[allow(unused)]
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum PreprocessorAst {
     #[default]
@@ -33,6 +32,11 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
         *index += 1;
         match token {
             PreprocessorToken::Operator(operator) => { match operator {
+                // Invalid 
+                Operator::Increment|Operator::Decrement|Operator::AddAssign|Operator::SubAssign|Operator::MulAssign
+                | Operator::DivAssign|Operator::ModAssign|Operator::OrAssign
+                | Operator::AndAssign|Operator::XorAssign|Operator::ShiftLeftAssign
+                | Operator::ShiftRightAssign => panic!("{}", PreprocessorError::InvalidOperator(&format!("{:?}", operator)).fail(current_position)),
                 // Unary
                 Operator::Plus|Operator::Minus => {
                     if operator.precedence() > precedence {
@@ -52,15 +56,15 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
                         // In this case, the only possibilities are:
                         //  defined !MACRO
                         //  defined ~MACRO
-                        panic!("{}", compilation_error(current_position, (Error::DefinedChildNotMacro)))
+                        panic!("{}", PreprocessorError::DefinedChildNotMacro.fail(current_position))
                     } else {
                         // In this case, we have for example
                         //  ... + !b : we read "!"
                         //  !b + ... : we read "!"
                         if acc != PreprocessorAst::Empty {
-             msed               // We were in a situation like
+                            // We were in a situation like
                             // a!b + ... : we read !
-                            panic!("{}", compilation_error(current_position, (Error::IncompleteOperator)))
+                            panic!("{}", PreprocessorError::IncompleteOperator(&format!("{:?}", operator)).fail(current_position))
                         } else {
                             // Here acc is empty
                             // We need to stop as soon as we reach an operator
@@ -87,7 +91,7 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
                         if acc == PreprocessorAst::Empty {
                             // Here we have for example
                             // &&b : we read "&&"
-                            panic!("{}", compilation_error(current_position, Error::IncompleteOperator))
+                            panic!("{}", PreprocessorError::IncompleteOperator(&format!("{:?}", operator)).fail(current_position))
                         } else {
                             // Here we have for example
                             // a&&b||c : we read "||"
@@ -188,13 +192,13 @@ pub fn eval(ast: &PreprocessorAst, state: &State) -> i32 {
         PreprocessorAst::Empty => 0,
         PreprocessorAst::TernaryOperator { operator, left, center, right } => match operator {
             Operator::Conditional => if eval(left, state)!=0 { eval(center, state) } else { eval(right, state) },
-            _ => panic!("Unexpected error")
+            _ => panic!("Read a unary or binary operator as a ternary operato")
         },
         PreprocessorAst::BinaryOperator { operator, left, right } => {let (x, y) = (eval(left, state), eval(right, state)); match operator {
             Operator::Plus|Operator::Minus|Operator::Not|Operator::AddAssign|Operator::SubAssign
             | Operator::MulAssign|Operator::DivAssign|Operator::ModAssign|Operator::OrAssign
             | Operator::AndAssign|Operator::XorAssign|Operator::ShiftLeftAssign|Operator::ShiftRightAssign
-            | Operator::Defined|Operator::Conditional|Operator::BitwiseNot => panic!("Unexpected error"),
+            | Operator::Defined|Operator::Conditional|Operator::BitwiseNot|Operator::Increment|Operator::Decrement => panic!("Read a unary or ternary operator as a binary operator node"),
             Operator::Add => x+y,
             Operator::Sub => x-y,
             Operator::Mul => x*y,
@@ -220,32 +224,32 @@ pub fn eval(ast: &PreprocessorAst, state: &State) -> i32 {
                 | Operator::BitwiseAnd|Operator::BitwiseOr|Operator::BitwiseXor
                 | Operator::And|Operator::Or|Operator::NotEqual|Operator::Eequal
                 | Operator::LessThan|Operator::GreaterThan|Operator::LessEqual
-                | Operator::GreaterEqual|Operator::ShiftLeft|Operator::ShiftRight|Operator::Conditional => panic!("Unexpected error"),
+                | Operator::GreaterEqual|Operator::ShiftLeft|Operator::ShiftRight|Operator::Conditional => panic!("Read a binary or ternary operator as a unary operator node"),
                 Operator::Defined => 
                     if let PreprocessorAst::Leaf(macro_token) = child.as_ref() {
                         if let PreprocessorToken::Macro(macro_name) = &macro_token {
                             i32::from(state.defines.contains_key(macro_name))
                         } else {
-                            panic!("{}", compilation_error(&state.current_position, (Error::DefinedChildNotMacro)))
+                            panic!("{}", PreprocessorError::DefinedChildNotMacro.fail(&state.current_position))
                         }
                     } else {
-                        panic!("{}", compilation_error(&state.current_position, (Error::DefinedChildNotLeaf)))
+                        panic!("{}", PreprocessorError::DefinedChildNotLeaf.fail(&state.current_position))
                     }
                 Operator::Plus => x,
                 Operator::Minus => -x,
                 Operator::Not => i32::from(x==0),
                 Operator::BitwiseNot => !x,
-                Operator::AddAssign|Operator::SubAssign|Operator::MulAssign
+                Operator::Increment|Operator::Decrement|Operator::AddAssign|Operator::SubAssign|Operator::MulAssign
                 | Operator::DivAssign|Operator::ModAssign|Operator::OrAssign
                 | Operator::AndAssign|Operator::XorAssign|Operator::ShiftLeftAssign
-                | Operator::ShiftRightAssign => panic!("Unknown")
+                | Operator::ShiftRightAssign => panic!("{}", PreprocessorError::InvalidOperator(&format!("{:?}", &operator)).fail(&state.current_position)),
             }
         },
         PreprocessorAst::Leaf(leaf) => match leaf {
             PreprocessorToken::Macro(macro_name) => {
                 let default = MacroValue::String(String::from("0"));
                 let macro_value = state.defines.get(macro_name).unwrap_or(&default);
-                // let macro_value = state.defines.get(macro_name).unwrap_or_else(|| panic!("{}", &compilation_error(&state.current_position, Error::MacroNameNotFound("Manifestement on doit implémenter la ligne du dessus car les gens sont cons :)"))));
+                // let macro_value = state.defines.get(macro_name).unwrap_or_else(|| panic!("{}", &compilation_error(&state.current_position, PreprocessorError::MacroNameNotFound("Manifestement on doit implémenter la ligne du dessus car les gens sont cons :)"))));
                 match macro_value {
                     MacroValue::String(macro_string) => eval(&tokens_to_ast(&parse_preprocessor(macro_string), &state.current_position), state),
                     MacroValue::Function { .. } => todo!(),
@@ -253,8 +257,8 @@ pub fn eval(ast: &PreprocessorAst, state: &State) -> i32 {
             },
             #[allow(clippy::cast_possible_truncation)]
             PreprocessorToken::LiteralNumber(x) => x.floor() as i32,
-            PreprocessorToken::LiteralString(_) => panic!("No strings allowed"),
-            _ => panic!("{}", compilation_error(&state.current_position, Error::InvalidLeaf(&format!("{leaf:?}")))),
+            PreprocessorToken::LiteralString(_) => panic!("{}", PreprocessorError::StringsNotAllowed.fail(&state.current_position)),
+            _ => panic!("{}", PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail(&state.current_position)),
         },
     }
 }

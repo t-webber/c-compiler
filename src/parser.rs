@@ -34,11 +34,12 @@
 //     While,
 // }
 
+#[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     // Unary
-    // Plus,
-    // Minus,
+    Plus,
+    Minus,
     Not,
     BitwiseNot,
 
@@ -93,8 +94,8 @@ impl Operator {
         match self {
             Operator::Defined => 0,
 
-            // Operator::Increment => 1,
-            // Operator::Decrement => 1,
+            Operator::Increment => 1,
+            Operator::Decrement => 1,
             // ()
             // []
             // . ->
@@ -349,7 +350,7 @@ pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
     string.chars().for_each(|c| {
         let new_token = current_token.clone() + &String::from(c);
         // println!("Current = {current_token:?} and new = {new_token:?}");
-        if let Some(_) = token_from_str(&new_token) {
+        if token_from_str(&new_token).is_some() {
             current_token = new_token;
             // println!("Chose new");
         } else if let Some(token) = token_from_str(&current_token) {

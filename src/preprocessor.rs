@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::eval::{eval, tokens_to_ast};
 use crate::parser::parse_preprocessor;
-use crate::tools::{compilation_error, Error, FilePosition};
+use crate::tools::{FilePosition, GeneralError, PreprocessorError};
 
 /// Preprocessor Directive Parsing State
 ///
@@ -398,21 +398,22 @@ fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
         }
         Directive::Error { message } => {
             dbg!("{:?}\n", &state);
-            panic!("{}", compilation_error(&state.current_position, Error::DirectiveError(message)))
+            panic!("{}", PreprocessorError::DirectiveError(message).fail(&state.current_position));
         }
         Directive::Warning { message } => {
-            eprintln!("{}", compilation_error(&state.current_position, Error::DirectiveWarning(message)));
+            eprintln!("{}", PreprocessorError::DirectiveWarning(message).fail(&state.current_position));
             String::new()
         }
         Directive::Pragma { message } => {
-            eprintln!("{}", compilation_error(&state.current_position, Error::DirectiveNotImplemented(message)));
+            eprintln!("{}", PreprocessorError::DirectiveUnknown(message).fail(&state.current_position));
             String::new()
         }
         Directive::None => 
-            panic!("{}", compilation_error(&state.current_position, Error::DirectiveNameMissing)),
+            panic!("{}", PreprocessorError::DirectiveNameMissing.fail(&state.current_position)),
     }
 }
 
+#[rustfmt::skip]
 pub fn preprocess(content: &str, state: &mut State) -> String {
     let mut lines: Vec<(u32, String)> = vec![];
     let mut previous_line_escaped: bool = false;
@@ -460,19 +461,15 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
             // println!("Hashmap: {}", format!("{:?}", state.defines).blue());
             match &state.directive_parsing {
                 Pips::DirectiveValue(value) => {
-                    if !value.is_empty() {
-                        current_directive.values.push(value.clone());
-                    }
-                    // println!("Struct: {current_directive:?}");
+                    if !value.is_empty() {current_directive.values.push(value.clone());}
                     preprocess_directive(&convert_from_store(&current_directive, state), state)
                 }
                 Pips::DirectiveName(name) => {
                     current_directive.values.push(name.clone());
-                    // println!("Struct: {current_directive:?}");
                     preprocess_directive(&convert_from_store(&current_directive, state), state)
                 }
                 Pips::DirectiveArgs(args) => {
-                    assert!(args.is_empty(), "Directive args {args:?} not closed");
+                    assert!(args.is_empty(), "{}", PreprocessorError::MacroArgsNotClosed.fail(&state.current_position));
                     preprocess_directive(&convert_from_store(&current_directive, state), state)
                 }
                 Pips::None => preprocessed_line,
@@ -481,9 +478,8 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
         .collect();
     assert!(
         state.comment_level == 0,
-        "{} {}",
-        "/* unmatched",
-        state.comment_level.to_string().as_str()
+        "{}",
+        GeneralError::UnclosedComment(state.comment_unclosed_positon.last().unwrap(), state.comment_level.to_string().as_str()).fail(&state.current_position)
     );
     state.end_file();
     processed_file

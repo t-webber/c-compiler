@@ -1,0 +1,69 @@
+\documentclass{article}
+
+\newenvironment{ol}[2][1]{
+    \newcounter{enum_counter}
+    \setcounter{enum_counter}{#2}
+    \newcommand{\myitem}{{\ifnum #1>99\Large\else\ifnum #1>9\large\fi\fi\arabic{enum_counter}. \addtocounter{enum_counter}{#1}}}
+    \begin{enumerate}
+}{\end{enumerate}}
+
+\begin{document}
+
+\section{Compiler errors}
+
+\begin{ol}[100]{100}
+    \item General errors
+        \begin{ol}[10]{10}
+            \item UnclosedComment, 
+            \begin{ol}{11}
+                \item Unclosed string,
+                \item Unclosed char,
+                \item Unclosed parenthesis,
+                \item Unclosed bracket,
+                \item Unclosed brace,
+            \end{ol}
+        \end{ol}
+
+    \item Preprocessor errors
+        \begin{ol}[10]{110}
+            \item \verb|#| errors
+            \begin{ol}{111}
+                \item \verb|#| directive not found after \verb|#|
+                \item \verb|#| found in the middle of a line
+            \end{ol}
+            \item \verb|#include| errors
+            \begin{ol}{111}
+                \item \verb|#include| not a valid file name
+                \item \verb|#include| file not found
+                \item \verb|#include| file not readable
+            \end{ol}
+            \item macro errors (\verb|#define| and \verb|#undef|)
+            \begin{ol}{121}
+                \item \verb|#define| (and \verb|#undef| and \verb|defined|) not an valid macro name
+                \item \verb|#define| macro arguments never closed
+                \item \verb|#undef| macro not defined
+            \end{ol}
+            \item expression errors (\verb|#if| and \verb|#elif|)
+            \begin{ol}{141}
+                \item invalid expression: incomplete operator
+                \item invalid expression: invalid operator
+                \item invalid expression: child of defined not a leaf
+                \item invalid expression: child of defined not a macro
+                \item invalid expression: invalid leaf
+                \item invalid expression: strings not allowed
+            \end{ol}
+            \item conditional errors (\verb|#if|, \verb|#elif|, \verb|#else|, \verb|#endif|)
+                \item \verb|#elif| found without \verb|#if|
+                \item \verb|#else| found without \verb|#if|
+                \item \verb|#endif| found without \verb|#if|
+            \end{ol}
+            \item C errors
+            \begin{ol}{161}
+                \item \verb|#error| found
+                \item \verb|#warning| found
+                \item unknown directive found
+            \end{ol}
+        \end{ol}
+\end{ol}
+
+\end{document}
