@@ -298,13 +298,13 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
             macro_name: String::from(*macro_name),
         },
         ["if", expression_string] => {
-            let ast = tokens_to_ast(&parse_preprocessor(expression_string), &state.current_position);
+            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &state.current_position);
             Directive::If {
                 expression: eval(&ast, state) != 0,
             }
         }
         ["elif", expression_string] => {
-            let ast = tokens_to_ast(&parse_preprocessor(expression_string), &state.current_position);
+            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &state.current_position);
             Directive::Elif {
                 expression: eval(&ast, state) != 0,
             }
@@ -487,6 +487,9 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
 
 fn add_default_macro(state: &mut State) {
     let macros = &[
+        //
+        // Standard Predefined Macros
+        //
         ("__FILE__", "forgotten"),
         ("__LINE__", "1"), // mut
         ("__DATE__", "forgotten"),
@@ -495,86 +498,150 @@ fn add_default_macro(state: &mut State) {
         ("__STDC_VERSION__", "199910L"),
         ("__STDC_HOSTED__", "1"),
         //
+        // Common Predefined Macros
+        //
         ("__COUNTER__", "0"),
         ("__GNUC__", "10"),
         ("__GNUC_MINOR__", "3"),
         ("__GNUC_PATCHLEVEL__", "0"),
         ("__GNUG__", "0"),
+        ("__BASE__FILE__", "forgotten"),
         ("__FILE_NAME__", "forgotten"), // mut
         ("__INCLUDE_LEVEL__", "0"),     // mut
-        ("__VERSION__", "1.0.0"),
-        ("__GNUC_GNU_INLINE", "1"),
-        //
-        ("__STDC_NO_ATOMICS__", "1"),
-        ("__STDC_NO_COMPLEX__", "1"),
-        ("__STDC_NO_THREADS__", "1"),
-        ("__STDC_NO_VLA__", "1"),
-        ("__STDC_MB_MIGHT_NEQ_WC__", "1"),
-        ("__STDC_ISO_10646__", "201706L"),
-        ("__STDC_IEC_559__", "1"),
-        ("__STDC_IEC_559_COMPLEX__", "1"),
-        ("__STDC_LIB_EXT1__", "201112L"),
-        ("__STDC_NO_THREADS__", "1"),
-        ("__STDC_NO_VLA__", "1"),
-        ("__STDC_UTF_16__", "1"),
-        ("__STDC_UTF_32__", "1"),
-        ("__STDC_VERSION__", "201710L"),
-        ("__STDCPP_STRICT_POINTER_SAFETY__", "1"),
-        ("__STDCPP_THREADS__", "1"),
-        ("__STDCPP_UTF_16__", "1"),
-        ("__STDCPP_UTF_32__", "1"),
-        ("__STDC_HOSTED__", "1"),
-        ("__STDC_NO_ATOMICS__", "1"),
-        ("__STDC_NO_COMPLEX__", "1"),
-        ("__STDC_NO_THREADS__", "1"),
-        ("__STDC_NO_VLA__", "1"),
-        ("__STDC_MB_MIGHT_NEQ_WC__", "1"),
-        ("__STDC_ISO_10646__", "201706L"),
-        ("__STDC_IEC_559__", "1"),
-        ("__STDC_IEC_559_COMPLEX__", "1"),
-        ("__STDC_LIB_EXT1__", "201112L"),
-        ("__STDC_NO_THREADS__", "1"),
-        ("__STDC_NO_VLA__", "1"),
-        ("__STDC_UTF_16__", "1"),
-        ("__STDC_UTF_32__", "1"),
-        ("__STDC_VERSION__", "201710L"),
-        ("__STDCPP_STRICT_POINTER_SAFETY__", "1"),
-        ("__STDCPP_THREADS__", "1"),
-        ("__STDCPP_UTF_16__", "1"),
-        ("__STDCPP_UTF_32__", "1"),
-        ("__STDC_HOSTED__", "1"),
-        ("__STDC_NO_ATOMICS__", "1"),
-        ("__STDC_NO_COMPLEX__", "1"),
-        ("__STDC_NO_THREADS__", "1"),
-        ("__STDC_NO_VLA__", "1"),
-        ("__GNUC_RH_RELEASE__", "1"),
-        ("__GXX_ABI_VERSION", "1014"),
-        ("__SCHAR_MAX__", "127"),
-        ("__SHRT_MAX__", "32767"),
-        ("__INT_MAX__", "2147483647"),
-        ("__LONG_MAX__", "9223372036854775807L"),
-        ("__LONG_LONG_MAX__", "9223372036854775807LL"),
-        ("__WCHAR_MAX__", "2147483647"),
-        ("__WCHAR_MIN__", "-2147483648"),
-        ("__WINT_MAX__", "2147483647"),
-        ("__WINT_MIN__", "-2147483648"),
-        ("__PTRDIFF_MAX__", "9223372036854775807L"),
-        ("__SIZE_MAX__", "18446744073709551615UL"),
+        ("__VERSION__", "TeleCC 1.0"),
+        ("__GNUC_GNU_INLINE", "1"), // before 90
+        // ("__GNUC_STDC_INLINE", "1"), after 99
+        ("__USER_LABEL_PREFIX__", "not understood"),
+        ("__REGISTER_PREFIX__", "not understood"),
+        ("__SIZE_TYPE__", "long unsigned int"),
+        ("__PTRDIFF_TYPE__", "long int"),
+        ("__WCHAR_TYPE__", "int"),
+        ("__WINT_TYPE__", "unsigned int"),
+        ("__INTMAX_TYPE__", "long int"),
+        ("__UINTMAX_TYPE__", "long unsigned int"),
+        // __SIG_ATOMIC_TYPE__
+        ("__INT8_TYPE__", "signed char"),
+        ("__INT16_TYPE__", "short"),
+        ("__INT32_TYPE__", "int"),
+        ("__INT64_TYPE__", "long int"),
+        ("__UINT8_TYPE__", "unsigned char"),
+        ("__UINT16_TYPE__", "unsigned short"),
+        ("__UINT32_TYPE__", "unsigned int"),
+        ("__UINT64_TYPE__", "long unsigned int"),
+        ("__INT_LEAST8_TYPE__", "signed char"),
+        ("__INT_LEAST16_TYPE__", "short"),
+        ("__INT_LEAST32_TYPE__", "int"),
+        ("__INT_LEAST64_TYPE__", "long int"),
+        ("__UINT_LEAST8_TYPE__", "unsigned char"),
+        ("__UINT_LEAST16_TYPE__", "unsigned short"),
+        ("__UINT_LEAST32_TYPE__", "unsigned int"),
+        ("__UINT_LEAST64_TYPE__", "long unsigned int"),
+        ("__INT_FAST8_TYPE__", "signed char"),
+        ("__INT_FAST16_TYPE__", "short"),
+        ("__INT_FAST32_TYPE__", "int"),
+        ("__INT_FAST64_TYPE__", "long int"),
+        ("__UINT_FAST8_TYPE__", "unsigned char"),
+        ("__UINT_FAST16_TYPE__", "unsigned short"),
+        ("__UINT_FAST32_TYPE__", "unsigned int"),
+        ("__UINT_FAST64_TYPE__", "long unsigned int"),
+        ("__INTPTR_TYPE__", "long int"),
+        ("__UINTPTR_TYPE__", "long unsigned int"),
         ("__CHAR_BIT__", "8"),
-        ("__CHAR_MAX__", "127"),
-        ("__CHAR_MIN__", "-128"),
-        ("__UCHAR_MAX__", "255"),
-        ("__SHRT_MIN__", "-32768"),
-        ("__INT_MIN__", "-2147483648"),
-        ("__LONG_MIN__", "-9223372036854775808L"),
-        ("__LONG_LONG_MIN__", "-9223372036854775808LL"),
+        // _SCHAR_MAX__
+        // __WCHAR_MAX__
+        // __SHRT_MAX__
+        // __INT_MAX__
+        // __LONG_MAX__
+        // __LONG_LONG_MAX__
+        // __WINT_MAX__
+        // __SIZE_MAX__
+        // __PTRDIFF_MAX__
+        // __INTMAX_MAX__
+        // __UINTMAX_MAX__
+        // __SIG_ATOMIC_MAX__
+        // __INT8_MAX__
+        // __INT16_MAX__
+        // __INT32_MAX__
+        // __INT64_MAX__
+        // __UINT8_MAX__
+        // __UINT16_MAX__
+        // __UINT32_MAX__
+        // __UINT64_MAX__
+        // __INT_LEAST8_MAX__
+        // __INT_LEAST16_MAX__
+        // __INT_LEAST32_MAX__
+        // __INT_LEAST64_MAX__
+        // __UINT_LEAST8_MAX__
+        // __UINT_LEAST16_MAX__
+        // __UINT_LEAST32_MAX__
+        // __UINT_LEAST64_MAX__
+        // __INT_FAST8_MAX__
+        // __INT_FAST16_MAX__
+        // __INT_FAST32_MAX__
+        // __INT_FAST64_MAX__
+        // __UINT_FAST8_MAX__
+        // __UINT_FAST16_MAX__
+        // __UINT_FAST32_MAX__
+        // __UINT_FAST64_MAX__
+        // __INTPTR_MAX__
+        // __UINTPTR_MAX__
+        // __WCHAR_MIN__
+        // __WINT_MIN__
+        // __SIG_ATOMIC_MIN__
+        // __INT8_C
+        // __INT16_C
+        // __INT32_C
+        // __INT64_C
+        // __UINT8_C
+        // __UINT16_C
+        // __UINT32_C
+        // __UINT64_C
+        // __INTMAX_C
+        // __UINTMAX_C
+        // __SCHAR_WIDTH__
+        // __SHRT_WIDTH__
+        // __INT_WIDTH__
+        // __LONG_WIDTH__
+        // __LONG_LONG_WIDTH__
+        // __PTRDIFF_WIDTH__
+        // __SIG_ATOMIC_WIDTH__
+        // __SIZE_WIDTH__
+        // __WCHAR_WIDTH__
+        // __WINT_WIDTH__
+        // __INT_LEAST8_WIDTH__
+        // __INT_LEAST16_WIDTH__
+        // __INT_LEAST32_WIDTH__
+        // __INT_LEAST64_WIDTH__
+        // __INT_FAST8_WIDTH__
+        // __INT_FAST16_WIDTH__
+        // __INT_FAST32_WIDTH__
+        // __INT_FAST64_WIDTH__
+        // __INTPTR_WIDTH__
+        // __INTMAX_WIDTH__
+        // __SIZEOF_INT__
+        // __SIZEOF_LONG__
+        // __SIZEOF_LONG_LONG__
+        // __SIZEOF_SHORT__
+        // __SIZEOF_POINTER__
+        // __SIZEOF_FLOAT__
+        // __SIZEOF_DOUBLE__
+        // __SIZEOF_LONG_DOUBLE__
+        // __SIZEOF_SIZE_T__
+        // __SIZEOF_WCHAR_T__
+        // __SIZEOF_WINT_T__
+        // __SIZEOF_PTRDIFF_T__
+        // __BYTE_ORDER__
+        // __FLOAT_WORD_ORDER__
+        //
+        // System-specific Predefined Macros
+        //
     ];
-    macros.iter().for_each(|(name, value)| {
+    for (name, value) in macros {
         state.defines.insert(
             String::from(*name),
             MacroValue::String(String::from(*value)),
         );
-    });
+    }
 }
 
 pub fn preprocess_unit(filepath: PathBuf) -> String {

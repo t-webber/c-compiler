@@ -80,10 +80,10 @@ pub enum Operator {
     Defined,
 }
 
-// enum Associativity {
-//     LeftToRight,
-//     RightToLeft,
-// }
+pub enum Associativity {
+    LeftToRight,
+    RightToLeft,
+}
 
 impl Operator {
     pub fn max_precedence() -> u32 {
@@ -94,38 +94,29 @@ impl Operator {
         match self {
             Operator::Defined => 0,
 
-            Operator::Increment => 1,
-            Operator::Decrement => 1,
+            Operator::Increment | Operator::Decrement => 1,
             // ()
             // []
             // . ->
             // (type){elt}
             //
             // prefix increment / decrement
-            Operator::Plus => 2,
-            Operator::Minus => 2,
-            Operator::Not => 2,
-            Operator::BitwiseNot => 2,
+            Operator::Plus | Operator::Minus | Operator::Not | Operator::BitwiseNot => 2,
             // (cast)
             // * & sizeof _alignof
             //
-            Operator::Mul => 3,
-            Operator::Div => 3,
-            Operator::Mod => 3,
+            Operator::Mul | Operator::Div | Operator::Mod => 3,
             //
-            Operator::Add => 4,
-            Operator::Sub => 4,
+            Operator::Add | Operator::Sub => 4,
             //
-            Operator::ShiftLeft => 5,
-            Operator::ShiftRight => 5,
+            Operator::ShiftLeft | Operator::ShiftRight => 5,
             //
-            Operator::LessThan => 6,
-            Operator::LessEqual => 6,
-            Operator::GreaterThan => 6,
-            Operator::GreaterEqual => 6,
+            Operator::LessThan
+            | Operator::LessEqual
+            | Operator::GreaterThan
+            | Operator::GreaterEqual => 6,
             //
-            Operator::Eequal => 7,
-            Operator::NotEqual => 7,
+            Operator::Eequal | Operator::NotEqual => 7,
 
             Operator::BitwiseAnd => 8,
 
@@ -139,79 +130,79 @@ impl Operator {
 
             Operator::Conditional => 13,
 
-            Operator::AddAssign => 14,
-            Operator::SubAssign => 14,
-            Operator::MulAssign => 14,
-            Operator::DivAssign => 14,
-            Operator::ModAssign => 14,
-            Operator::OrAssign => 14,
-            Operator::AndAssign => 14,
-            Operator::XorAssign => 14,
-            Operator::ShiftLeftAssign => 14,
-            Operator::ShiftRightAssign => 14,
+            Operator::AddAssign
+            | Operator::SubAssign
+            | Operator::MulAssign
+            | Operator::DivAssign
+            | Operator::ModAssign
+            | Operator::OrAssign
+            | Operator::AndAssign
+            | Operator::XorAssign
+            | Operator::ShiftLeftAssign
+            | Operator::ShiftRightAssign => 14,
         }
     }
 
-    // pub fn associativity(&self) -> Associativity {
-    //     match self {
-    //         Operator::Defined => Associativity::LeftToRight,
+    pub fn associativity(&self) -> Associativity {
+        match self {
+            Operator::Defined => Associativity::LeftToRight,
 
-    //         Operator::Increment => Associativity::LeftToRight,
-    //         Operator::Decrement => Associativity::LeftToRight,
-    //         // ()
-    //         // []
-    //         // . ->
-    //         // (type){elt}
+            Operator::Increment => Associativity::LeftToRight,
+            Operator::Decrement => Associativity::LeftToRight,
+            // ()
+            // []
+            // . ->
+            // (type){elt}
 
-    //         // prefix increment / decrement
-    //         Operator::Plus => Associativity::RightToLeft,
-    //         Operator::Minus => Associativity::RightToLeft,
-    //         Operator::Not => Associativity::RightToLeft,
-    //         Operator::BitwiseNot => Associativity::RightToLeft,
-    //         // (cast)
-    //         // * & sizeof _alignof
-    //         Operator::Mul => Associativity::LeftToRight,
-    //         Operator::Div => Associativity::LeftToRight,
-    //         Operator::Mod => Associativity::LeftToRight,
+            // prefix increment / decrement
+            Operator::Plus => Associativity::RightToLeft,
+            Operator::Minus => Associativity::RightToLeft,
+            Operator::Not => Associativity::RightToLeft,
+            Operator::BitwiseNot => Associativity::RightToLeft,
+            // (cast)
+            // * & sizeof _alignof
+            Operator::Mul => Associativity::LeftToRight,
+            Operator::Div => Associativity::LeftToRight,
+            Operator::Mod => Associativity::LeftToRight,
 
-    //         Operator::Add => Associativity::LeftToRight,
-    //         Operator::Sub => Associativity::LeftToRight,
+            Operator::Add => Associativity::LeftToRight,
+            Operator::Sub => Associativity::LeftToRight,
 
-    //         Operator::ShiftLeft => Associativity::LeftToRight,
-    //         Operator::ShiftRight => Associativity::LeftToRight,
+            Operator::ShiftLeft => Associativity::LeftToRight,
+            Operator::ShiftRight => Associativity::LeftToRight,
 
-    //         Operator::LessThan => Associativity::LeftToRight,
-    //         Operator::LessEqual => Associativity::LeftToRight,
-    //         Operator::GreaterThan => Associativity::LeftToRight,
-    //         Operator::GreaterEqual => Associativity::LeftToRight,
+            Operator::LessThan => Associativity::LeftToRight,
+            Operator::LessEqual => Associativity::LeftToRight,
+            Operator::GreaterThan => Associativity::LeftToRight,
+            Operator::GreaterEqual => Associativity::LeftToRight,
 
-    //         Operator::Eequal => Associativity::LeftToRight,
-    //         Operator::NotEqual => Associativity::LeftToRight,
+            Operator::Eequal => Associativity::LeftToRight,
+            Operator::NotEqual => Associativity::LeftToRight,
 
-    //         Operator::BitwiseAnd => Associativity::LeftToRight,
+            Operator::BitwiseAnd => Associativity::LeftToRight,
 
-    //         Operator::BitwiseXor => Associativity::LeftToRight,
+            Operator::BitwiseXor => Associativity::LeftToRight,
 
-    //         Operator::BitwiseOr => Associativity::LeftToRight,
+            Operator::BitwiseOr => Associativity::LeftToRight,
 
-    //         Operator::And => Associativity::LeftToRight,
+            Operator::And => Associativity::LeftToRight,
 
-    //         Operator::Or => Associativity::LeftToRight,
+            Operator::Or => Associativity::LeftToRight,
 
-    //         Operator::Conditional => Associativity::RightToLeft,
+            Operator::Conditional => Associativity::RightToLeft,
 
-    //         Operator::AddAssign => Associativity::RightToLeft,
-    //         Operator::SubAssign => Associativity::RightToLeft,
-    //         Operator::MulAssign => Associativity::RightToLeft,
-    //         Operator::DivAssign => Associativity::RightToLeft,
-    //         Operator::ModAssign => Associativity::RightToLeft,
-    //         Operator::OrAssign => Associativity::RightToLeft,
-    //         Operator::AndAssign => Associativity::RightToLeft,
-    //         Operator::XorAssign => Associativity::RightToLeft,
-    //         Operator::ShiftLeftAssign => Associativity::RightToLeft,
-    //         Operator::ShiftRightAssign => Associativity::RightToLeft,
-    //     }
-    // }
+            Operator::AddAssign => Associativity::RightToLeft,
+            Operator::SubAssign => Associativity::RightToLeft,
+            Operator::MulAssign => Associativity::RightToLeft,
+            Operator::DivAssign => Associativity::RightToLeft,
+            Operator::ModAssign => Associativity::RightToLeft,
+            Operator::OrAssign => Associativity::RightToLeft,
+            Operator::AndAssign => Associativity::RightToLeft,
+            Operator::XorAssign => Associativity::RightToLeft,
+            Operator::ShiftLeftAssign => Associativity::RightToLeft,
+            Operator::ShiftRightAssign => Associativity::RightToLeft,
+        }
+    }
 }
 
 // #[derive(Debug)]
@@ -275,8 +266,8 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
             "!" => PreprocessorToken::Operator(Operator::Not),
             "?" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Interrogation),
             ":" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon),
-            "+" => PreprocessorToken::Operator(Operator::Add),
-            "-" => PreprocessorToken::Operator(Operator::Sub),
+            "+" => PreprocessorToken::Operator(Operator::Plus),
+            "-" => PreprocessorToken::Operator(Operator::Minus),
             "*" => PreprocessorToken::Operator(Operator::Mul),
             "~" => PreprocessorToken::Operator(Operator::BitwiseNot),
             "/" => PreprocessorToken::Operator(Operator::Div),

@@ -1,0 +1,101 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1cm]{geometry}
+\usepackage{xcolor}
+
+
+\newcounter{ol}
+\setcounter{ol}{-1}
+\newcounter{oll}
+\setcounter{oll}{0}
+\newcounter{olll}
+\setcounter{olll}{0}
+
+\newcommand{\li}{
+    \setcounter{olll}{0}
+    \setcounter{oll}{0}
+    \addtocounter{ol}{1}
+    \item[\theol00.]
+}
+\newcommand{\lii}{
+    \setcounter{olll}{0}
+    \addtocounter{oll}{1}
+    \item[\theol\theoll0.]
+}
+\newcommand{\liii}{
+    \addtocounter{olll}{1}
+    \item[\theol\theoll\theolll.]
+}
+
+
+
+\begin{document}
+
+\pagecolor{darkgray}
+\color{lightgray}\bfseries
+
+\begin{center}
+    \fboxsep=10px
+    \fboxrule=2px
+    \fbox{\LARGE Compiler errors}
+\end{center}
+
+
+\begin{description}
+    \li General errors
+    \begin{description}
+        \lii Reached EOF
+        \begin{description}
+            \liii Reached EOF: unclosed comment
+            \liii Reached EOF: unclosed string
+            \liii Reached EOF: unclosed char
+            \liii Reached EOF: unclosed parenthesis
+            \liii Reached EOF: unclosed bracket
+            \liii Reached EOF: unclosed brace
+            \liii Reached EOF: function \verb|main| not found
+        \end{description}
+    \end{description}
+
+    \li Preprocessor errors
+    \begin{description}
+        \lii \verb|#| errors
+        \begin{description}
+            \liii \verb|#| directive not found after \verb|#|
+            \liii \verb|#| found in the middle of a line
+        \end{description}
+        \lii \verb|#include| errors
+        \begin{description}
+            \liii \verb|#include| not a valid file name
+            \liii \verb|#include| file not found
+            \liii \verb|#include| file not readable
+        \end{description}
+        \lii macro errors (\verb|#define| and \verb|#undef|)
+        \begin{description}
+            \liii \verb|#define| and \verb|#undef|: not an valid macro name
+            \liii \verb|#define| and \verb|#undef|: macro arguments never closed
+            \liii \verb|#undef|: macro not defined
+        \end{description}
+        \lii expression errors (\verb|#if| and \verb|#elif|)
+        \begin{description}
+            \liii invalid expression: incomplete operator
+            \liii invalid expression: invalid operator
+            \liii invalid expression: child of defined not a leaf
+            \liii invalid expression: child of defined not a macro
+            \liii invalid expression: invalid leaf
+            \liii invalid expression: strings not allowed
+        \end{description}
+        \lii conditional errors (\verb|#if|, \verb|#elif|, \verb|#else|, \verb|#endif|)
+        \begin{description}
+            \liii \verb|#elif| found without enough \verb|#if| before them
+            \liii \verb|#else| found without enough \verb|#if| before them
+            \liii \verb|#endif| found without enough \verb|#if| before them
+        \end{description}
+        \lii C errors
+        \begin{description}
+            \liii \verb|#error| found in source code
+            \liii \verb|#warning| found in source code
+            \liii unknown directive found in source code
+        \end{description}
+    \end{description}
+\end{description}
+
+\end{document}

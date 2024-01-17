@@ -1,0 +1,6 @@
+
+clear
+
+value=$(gcc -Wall -pedantic -std=c99 -O0 ./test/fichier.c -E)
+
+echo -e "$value" > ./test/gcc.i

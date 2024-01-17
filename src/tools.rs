@@ -23,7 +23,7 @@ impl<'a> GeneralError<'a> {
     fn get_code(&self) -> (u32, String) {
         match self {
             GeneralError::UnclosedComment(start, level) => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
-            start.filepath, start.line, start.col)),
+                                                                                                start.filepath, start.line, start.col)),
             GeneralError::UnclosedString => (2, String::from("unclosed string")),
             GeneralError::UnclosedChar => (3, String::from("unclosed char")),
             GeneralError::UnclosedParenthesis => (4, String::from("unclosed parenthesis")),
@@ -103,8 +103,8 @@ impl<'a> GeneralError<'a> {
             let (code, message) = self.get_code();
             String::from("\n")
                 + &format!(
-                    "[ERROR: {:2e}]\t{}:{}:{}   {:?}",
-                    code, current_position.filepath, current_position.line, current_position.col, message
+                    "[ERROR: {:0>3}]\t{}:{}:{}   {:?}",
+                    10+code, current_position.filepath, current_position.line, current_position.col, message
                 )
         }
     }
@@ -115,7 +115,7 @@ impl<'a> PreprocessorError<'a> {
             let (code, message) = self.get_code();
             String::from("\n")
                 + &format!(
-                    "[ERROR: {:2e}]\t{}:{}:{}   {:?}",
+                    "[ERROR {:0>3}]\t{}:{}:{}   {:?}",
                     100+code, current_position.filepath, current_position.line, current_position.col, message
                 )
         }

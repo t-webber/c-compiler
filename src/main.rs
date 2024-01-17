@@ -13,12 +13,11 @@ use crate::eval::{eval, tokens_to_ast};
 use preprocessor::State;
 use tools::FilePosition;
 
-fn main() -> std::io::Result<()> {
+fn main() {
+    //-> std::io::Result<()> {
     // run_main("./test/fichier.c")
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
-    // test_parser("A && B || C");
-    test_parser("!1 || 2 && 3");
-    Ok(())
+    test_parser("2-2");
 }
 
 #[allow(unused)]
@@ -37,7 +36,7 @@ fn test_parser(expression: &str) {
     dbg!(input.clone());
     let tokens = parse_preprocessor(&input);
     dbg!(tokens.clone());
-    let ast = tokens_to_ast(&tokens.clone(), &FilePosition::default());
+    let ast = tokens_to_ast(&mut tokens.clone(), &FilePosition::default());
     dbg!(ast.clone());
     let result = eval(&ast, &State::default());
     dbg!(result);
