@@ -80,6 +80,7 @@ pub enum Operator {
     Defined,
 }
 
+#[derive(PartialEq)]
 pub enum Associativity {
     LeftToRight,
     RightToLeft,

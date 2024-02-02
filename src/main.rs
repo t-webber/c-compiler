@@ -17,7 +17,7 @@ fn main() {
     //-> std::io::Result<()> {
     // run_main("./test/fichier.c")
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
-    test_parser("2-2");
+    test_parser("4/2*2");
 }
 
 #[allow(unused)]

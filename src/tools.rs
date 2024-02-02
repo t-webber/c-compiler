@@ -119,4 +119,8 @@ impl<'a> PreprocessorError<'a> {
                     100+code, current_position.filepath, current_position.line, current_position.col, message
                 )
         }
+
+        pub fn fail_with_panic(self, current_position: &FilePosition) -> ! {
+            panic!("{}", self.fail(current_position))
+        }
     }
