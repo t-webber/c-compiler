@@ -298,13 +298,13 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
             macro_name: String::from(*macro_name),
         },
         ["if", expression_string] => {
-            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &state.current_position);
+            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &mut state.current_position);
             Directive::If {
                 expression: eval(&ast, state) != 0,
             }
         }
         ["elif", expression_string] => {
-            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &state.current_position);
+            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &mut state.current_position);
             Directive::Elif {
                 expression: eval(&ast, state) != 0,
             }
