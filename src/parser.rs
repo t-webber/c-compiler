@@ -88,7 +88,7 @@ pub enum Associativity {
 
 impl Operator {
     pub fn max_precedence() -> u32 {
-        14
+        15
     }
 
     pub fn precedence(&self) -> u32 {
@@ -146,62 +146,21 @@ impl Operator {
 
     pub fn associativity(&self) -> Associativity {
         match self {
-            Operator::Defined => Associativity::LeftToRight,
-
-            Operator::Increment => Associativity::LeftToRight,
-            Operator::Decrement => Associativity::LeftToRight,
-            // ()
-            // []
-            // . ->
-            // (type){elt}
-
-            // prefix increment / decrement
-            Operator::Plus => Associativity::RightToLeft,
-            Operator::Minus => Associativity::RightToLeft,
-            Operator::Not => Associativity::RightToLeft,
-            Operator::BitwiseNot => Associativity::RightToLeft,
-            // (cast)
-            // * & sizeof _alignof
-            Operator::Mul => Associativity::LeftToRight,
-            Operator::Div => Associativity::LeftToRight,
-            Operator::Mod => Associativity::LeftToRight,
-
-            Operator::Add => Associativity::LeftToRight,
-            Operator::Sub => Associativity::LeftToRight,
-
-            Operator::ShiftLeft => Associativity::LeftToRight,
-            Operator::ShiftRight => Associativity::LeftToRight,
-
-            Operator::LessThan => Associativity::LeftToRight,
-            Operator::LessEqual => Associativity::LeftToRight,
-            Operator::GreaterThan => Associativity::LeftToRight,
-            Operator::GreaterEqual => Associativity::LeftToRight,
-
-            Operator::Eequal => Associativity::LeftToRight,
-            Operator::NotEqual => Associativity::LeftToRight,
-
-            Operator::BitwiseAnd => Associativity::LeftToRight,
-
-            Operator::BitwiseXor => Associativity::LeftToRight,
-
-            Operator::BitwiseOr => Associativity::LeftToRight,
-
-            Operator::And => Associativity::LeftToRight,
-
-            Operator::Or => Associativity::LeftToRight,
-
-            Operator::Conditional => Associativity::RightToLeft,
-
-            Operator::AddAssign => Associativity::RightToLeft,
-            Operator::SubAssign => Associativity::RightToLeft,
-            Operator::MulAssign => Associativity::RightToLeft,
-            Operator::DivAssign => Associativity::RightToLeft,
-            Operator::ModAssign => Associativity::RightToLeft,
-            Operator::OrAssign => Associativity::RightToLeft,
-            Operator::AndAssign => Associativity::RightToLeft,
-            Operator::XorAssign => Associativity::RightToLeft,
-            Operator::ShiftLeftAssign => Associativity::RightToLeft,
-            Operator::ShiftRightAssign => Associativity::RightToLeft,
+            Operator::Plus
+            | Operator::Minus
+            | Operator::Not
+            | Operator::BitwiseNot
+            | Operator::Conditional
+            | Operator::AddAssign
+            | Operator::SubAssign
+            | Operator::DivAssign
+            | Operator::ModAssign
+            | Operator::OrAssign
+            | Operator::AndAssign
+            | Operator::XorAssign
+            | Operator::ShiftLeftAssign
+            | Operator::ShiftRightAssign => Associativity::RightToLeft,
+            _ => Associativity::LeftToRight,
         }
     }
 }

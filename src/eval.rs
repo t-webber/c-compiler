@@ -1,14 +1,11 @@
-use std::cmp::Ordering;
-
 use crate::parser::{
-    parse_preprocessor, /* , Associativity*/
-    Associativity, Bracing, Operator, PreprocessorToken,
+    parse_preprocessor, Associativity, Bracing, NonOpSymbol, Operator, PreprocessorToken,
 };
 use crate::preprocessor::{MacroValue, State};
 use crate::tools::{FilePosition, PreprocessorError};
 
 #[allow(unused)]
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub enum PreprocessorAst {
     #[default]
     Empty,
@@ -30,97 +27,78 @@ pub enum PreprocessorAst {
     Leaf(PreprocessorToken),
 }
 
+struct CurrentTree<'a> {
+    tokens: &'a Vec<PreprocessorToken>,
+    index: &'a mut usize,
+    acc: PreprocessorAst,
+    acc3: &'a mut &'a PreprocessorAst,
+    previous_operator: Option<&'a Operator>,
+}
+
 #[rustfmt::skip]
-fn handle_binary(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: PreprocessorAst, acc3: PreprocessorAst, previous_operator: Option<&Operator>, current_position: &FilePosition, current_operator: &Operator, previous_precedence: u32) ->  PreprocessorAst {
+fn go_back_in_tokens(current_tree: CurrentTree, current_position: &mut FilePosition, current_operator: Option<&Operator>) -> PreprocessorAst {
+    if current_tree.acc == PreprocessorAst::Empty {
+        PreprocessorError::IncompleteOperator(&format!("{current_operator:?}")).fail_with_panic(current_position)
+    } else {
+        *current_tree.index -= 1;
+        current_tree.acc
+    }
+}
+
+#[rustfmt::skip]
+fn handle_binary(current_tree: CurrentTree, current_position: &mut FilePosition, current_operator: &Operator, previous_precedence: u32, parenthesis_level: &mut usize) -> PreprocessorAst {
     let current_precedence = current_operator.precedence();
-    match current_precedence.cmp(&previous_precedence) {
-        Ordering::Greater => {
-            if acc == PreprocessorAst::Empty {
-                PreprocessorError::IncompleteOperator(&format!("{current_operator:?}")).fail_with_panic(current_position)
-            } else {
-                *index -= 1;
-                acc
-            }
-        },
-        Ordering::Equal => {
-            match current_operator.associativity() {
-                Associativity::LeftToRight => {
-                    let right = tokens_to_ast_impl(
-                        tokens,
-                        index,
-                        PreprocessorAst::Empty,
-                        acc3.clone(),
-                        Some(current_operator),
-                        current_position,
-                    );
-                    let binary_operator = PreprocessorAst::BinaryOperator {
-                        operator: current_operator.clone(),
-                        left: Box::new(acc),
-                        right: Box::new(right),
-                    };
-                    tokens_to_ast_impl(
-                        tokens,
-                        index,
-                        binary_operator,
-                        acc3,
-                        previous_operator,
-                        current_position,
-                    )
-                },
-                _ => {
-                    let right = tokens_to_ast_impl(
-                        tokens,
-                        index,
-                        PreprocessorAst::Empty,
-                        acc3.clone(),
-                        Some(current_operator),
-                        current_position,
-                    );
-                    let binary_operator = PreprocessorAst::BinaryOperator {
-                        operator: current_operator.clone(),
-                        left: Box::new(acc),
-                        right: Box::new(right),
-                    };
-                    tokens_to_ast_impl(
-                        tokens,
-                        index,
-                        binary_operator,
-                        acc3,
-                        previous_operator,
-                        current_position,
-                    )
-                }
-            }
-        },
-        _ => {
-            let right = tokens_to_ast_impl(
-                tokens,
-                index,
-                PreprocessorAst::Empty,
-                acc3.clone(),
-                Some(current_operator),
-                current_position,
-            );
-            let binary_operator = PreprocessorAst::BinaryOperator {
-                operator: current_operator.clone(),
-                left: Box::new(acc),
-                right: Box::new(right),
-            };
+    let close_left = current_precedence>previous_precedence || (current_precedence==previous_precedence && current_operator.associativity() == Associativity::LeftToRight);
+    if close_left {
+        go_back_in_tokens(current_tree, current_position, Some(current_operator))
+    } else {
+        let current_parenthesis_level: usize = *parenthesis_level;
+        let right = tokens_to_ast_impl(
+            current_tree.tokens,
+            current_tree.index,
+            PreprocessorAst::Empty,
+            &mut &PreprocessorAst::Empty,
+            Some(current_operator),
+            current_position,
+            parenthesis_level
+        );
+        let binary_tree = PreprocessorAst::BinaryOperator {
+            operator: current_operator.clone(),
+            left: Box::new(current_tree.acc),
+            right: Box::new(right),
+        };
+        if *parenthesis_level < current_parenthesis_level {
+            binary_tree
+        } else {
             tokens_to_ast_impl(
-                tokens,
-                index,
-                binary_operator,
-                acc3,
-                previous_operator,
+                current_tree.tokens,
+                current_tree.index,
+                binary_tree,
+                current_tree.acc3,
+                current_tree.previous_operator,
                 current_position,
+                parenthesis_level
             )
         }
     }
 }
 
 #[rustfmt::skip]
-fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: PreprocessorAst, acc3: PreprocessorAst, previous_operator: Option<&Operator>, current_position: &FilePosition) -> PreprocessorAst {
-    eprintln!("T = {:?}, A = {:?}", &tokens, acc.clone());
+fn tokens_to_ast_impl_or_acc3( tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: PreprocessorAst, acc3: &mut &PreprocessorAst, previous_operator: Option<&Operator>, current_position: &mut FilePosition, parenthesis_level: &mut usize,
+) -> PreprocessorAst {
+    if **acc3 == PreprocessorAst::Empty {
+        tokens_to_ast_impl(tokens, index, acc, acc3, previous_operator, current_position, parenthesis_level)
+    } else {
+        let result = tokens_to_ast_impl(tokens, index, acc, acc3, previous_operator, current_position, parenthesis_level);
+        *acc3 = &result;
+        // Will be thrown away anyway...
+        PreprocessorAst::Empty
+    }
+}
+
+#[rustfmt::skip]
+fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: PreprocessorAst, acc3: &mut &PreprocessorAst, previous_operator: Option<&Operator>, current_position: &mut FilePosition, parenthesis_level: &mut usize) -> PreprocessorAst {
+    eprintln!("A = {:?}", &acc);
     let previous_precedence = if let Some(previous_op) = previous_operator {
         previous_op.precedence()
     } else { Operator::max_precedence() };
@@ -130,7 +108,7 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
     if let Some(token) = tokens.get(*index) {
         *index += 1;
         match token {
-            PreprocessorToken::Operator(operator) => { match operator {
+            PreprocessorToken::Operator(operator) => match operator {
                 // Invalid 
                 Operator::Increment|Operator::Decrement|Operator::AddAssign|Operator::SubAssign|Operator::MulAssign
                 | Operator::DivAssign|Operator::ModAssign|Operator::OrAssign
@@ -139,18 +117,18 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
                 // Unary
                 Operator::Plus|Operator::Minus => {
                     // False unary
-                    if acc != PreprocessorAst::Empty {
+                    if acc == PreprocessorAst::Empty {
+                    // In this case, we have for example
+                    // acc + -b
+                        let child = tokens_to_ast_impl(tokens, index, acc, acc3, Some(operator), current_position, parenthesis_level);
+                        PreprocessorAst::UnaryOperator { operator: operator.clone(), child: Box::new(child) }
+                    } else {
                         let current_operator = match operator {
                             Operator::Plus => Operator::Add, 
                             Operator::Minus => Operator::Sub,
                             _ => panic!("Catastrophic"),
                         };
-                        handle_binary(tokens, index, acc, acc3, previous_operator, current_position, &current_operator, previous_precedence)
-                    } else {
-                        // In this case, we have for example
-                        // acc + -b
-                        let child = tokens_to_ast_impl(tokens, index, acc, acc3, Some(operator), current_position);
-                        PreprocessorAst::UnaryOperator { operator: operator.clone(), child: Box::new(child) }
+                        handle_binary(CurrentTree { tokens, index, acc, acc3, previous_operator }, current_position, &current_operator, previous_precedence, parenthesis_level)
                     }
                 },
                 Operator::Not|Operator::BitwiseNot|Operator::Defined => {
@@ -165,10 +143,10 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
                         // which precedence is higher than ours
                         
                         // child contains the content of the unary operator
-                        let child = tokens_to_ast_impl(tokens, index, PreprocessorAst::Empty, acc3.clone(), Some(operator), current_position);
+                        let child = tokens_to_ast_impl(tokens, index, PreprocessorAst::Empty, &mut &PreprocessorAst::Empty, Some(operator), current_position, parenthesis_level);
                         let unary_operator = PreprocessorAst::UnaryOperator { operator: operator.clone(), child: Box::new(child) };
                         // We use the precedence we received because of associativity
-                        tokens_to_ast_impl(tokens, index, unary_operator, acc3, previous_operator, current_position)
+                        tokens_to_ast_impl(tokens, index, unary_operator, acc3, previous_operator, current_position, parenthesis_level)
                     } else {
                         // We were in a situation like
                         // a!b + ... : we read !
@@ -181,24 +159,42 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
                 | Operator::Or|Operator::ShiftLeft|Operator::ShiftRight|Operator::NotEqual|Operator::Eequal|Operator::LessThan
                 | Operator::GreaterThan|Operator::LessEqual|Operator::GreaterEqual
                 | Operator::Add|Operator::Sub|Operator::Mul|Operator::Div|Operator::Mod => {
-                    handle_binary(tokens, index, acc, acc3, previous_operator, current_position, operator, operator.precedence())
+                    handle_binary(CurrentTree { tokens, index, acc, acc3, previous_operator}, current_position, operator, previous_precedence, parenthesis_level)
                 },
+
                 // Ternary
-                Operator::Conditional => PreprocessorError::InvalidOperator(&format!("{operator:?}")).fail_with_panic(current_position),
-            }
-            
-        },
+                Operator::Conditional => panic!("Not intented to be found in this scope"),
+            },
             PreprocessorToken::Bracing(bracing) => match bracing {
                 Bracing::LeftParenthesis => {
-                    let next = tokens_to_ast_impl(tokens, index, PreprocessorAst::Empty, acc3.clone(), None, current_position); tokens_to_ast_impl(tokens, index, next, acc3, None, current_position)
+                    *parenthesis_level += 1;
+                    let next = tokens_to_ast_impl(tokens, index, PreprocessorAst::Empty, &mut &PreprocessorAst::Empty, None, current_position, parenthesis_level);
+                    tokens_to_ast_impl(tokens, index, next, acc3, None, current_position, parenthesis_level)
+                    // tokens_to_ast_impl(tokens, index, acc, acc3, None, current_position, parenthesis_level)
                 },
-                Bracing::RightParenthesis => acc,
+                Bracing::RightParenthesis => {
+                    // tokens_to_ast_impl(tokens, index, acc, acc3, None, current_position) // tout ce qu'il ne faut pas faire
+                    *parenthesis_level -= 1;
+                    println!(">>>>>>>>>>>>>>>>>>>>>>>>> {acc:?}");
+                    acc
+                    // tokens_to_ast_impl(tokens, index, acc, acc3, previous_operator, current_position, parenthesis_level)
+                },
                 Bracing::LeftBracket | Bracing::RightBracket | Bracing::LeftBrace | Bracing::RightBrace => PreprocessorError::InvalidOperator(&format!("{bracing:?}")).fail_with_panic(current_position),
-                
             },
-            PreprocessorToken::NonOpSymbol(_) => todo!(),
-            _ => { let macro_leaf = PreprocessorAst::Leaf(token.clone()); tokens_to_ast_impl(
-                tokens, index, macro_leaf, acc3, previous_operator, current_position) },
+            PreprocessorToken::NonOpSymbol(symbol) => match symbol {
+                NonOpSymbol::Interrogation => {acc3 = &mut &acc; tokens_to_ast_impl(tokens, index, PreprocessorAst::Empty, &mut &PreprocessorAst::Empty, None, current_position, parenthesis_level)},
+                NonOpSymbol::Colon => {
+                    let current_parenthesis_level: usize = *parenthesis_level;
+                    let right = tokens_to_ast_impl(tokens, index, PreprocessorAst::Empty, &mut &PreprocessorAst::Empty, None, current_position, parenthesis_level);
+                    let ternary_tree = PreprocessorAst::TernaryOperator { operator: Operator::Conditional, left: Box::new(**acc3), center: Box::new(acc), right: Box::new(right) };
+                    if *parenthesis_level < current_parenthesis_level {
+                        ternary_tree
+                   } else {
+                        tokens_to_ast_impl(tokens, index, ternary_tree, &mut &PreprocessorAst::Empty, None, current_position, parenthesis_level)
+                    }
+                },
+            },
+            _ => { let macro_leaf = PreprocessorAst::Leaf(token.clone()); tokens_to_ast_impl_or_acc3(tokens, index, macro_leaf, acc3, previous_operator, current_position, parenthesis_level) },
         }
     } else {
         acc
@@ -266,12 +262,12 @@ fn tokens_to_ast_impl(tokens: &Vec<PreprocessorToken>, index: &mut usize, acc: P
 // }
 
 #[rustfmt::skip]
-pub fn tokens_to_ast(tokens: &mut Vec<PreprocessorToken>, current_position: &FilePosition) -> PreprocessorAst {
-    tokens_to_ast_impl(tokens, &mut 0, PreprocessorAst::Empty, PreprocessorAst::Empty, None, current_position)
+pub fn tokens_to_ast(tokens: &mut Vec<PreprocessorToken>, current_position: &mut FilePosition) -> PreprocessorAst {
+    tokens_to_ast_impl(tokens, &mut 0, PreprocessorAst::Empty, &mut &PreprocessorAst::Empty, None, current_position, &mut 0)
 }
 
 #[rustfmt::skip]
-pub fn eval(ast: &PreprocessorAst, state: &State) -> i32 {
+pub fn eval(ast: &PreprocessorAst, state: &mut State) -> i32 {
     match ast {
         PreprocessorAst::Empty => 0,
         PreprocessorAst::TernaryOperator { operator, left, center, right } => match operator {
@@ -335,7 +331,7 @@ pub fn eval(ast: &PreprocessorAst, state: &State) -> i32 {
                 let macro_value = state.defines.get(macro_name).unwrap_or(&default);
                 // let macro_value = state.defines.get(macro_name).unwrap_or_else(|| panic!("{}", &compilation_error(&state.current_position, PreprocessorError::MacroNameNotFound("Manifestement on doit implémenter la ligne du dessus car les gens sont cons :)"))));
                 match macro_value {
-                    MacroValue::String(macro_string) => eval(&tokens_to_ast(&mut parse_preprocessor(macro_string), &state.current_position), state),
+                    MacroValue::String(macro_string) => eval(&tokens_to_ast(&mut parse_preprocessor(macro_string), &mut state.current_position), state),
                     MacroValue::Function { .. } => todo!(),
                 }
             },

@@ -1,7 +1,7 @@
 // #![allow(unused)]
-use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
+use std::{env, fs::File};
 mod preprocessor;
 mod tools;
 
@@ -17,7 +17,12 @@ fn main() {
     //-> std::io::Result<()> {
     // run_main("./test/fichier.c")
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
-    test_parser("4/2*2");
+    test_parser(
+        env::args()
+            .collect::<Vec<String>>()
+            .get(1)
+            .map_or("1==2", |f| f.as_str()),
+    );
 }
 
 #[allow(unused)]
@@ -33,13 +38,14 @@ fn run_main(path: &str) -> std::io::Result<()> {
 #[allow(unused)]
 fn test_parser(expression: &str) {
     let input = String::from(expression);
-    dbg!(input.clone());
+    dbg!(&input);
     let tokens = parse_preprocessor(&input);
-    dbg!(tokens.clone());
-    let ast = tokens_to_ast(&mut tokens.clone(), &FilePosition::default());
-    dbg!(ast.clone());
-    let result = eval(&ast, &State::default());
-    dbg!(result);
+    dbg!(&tokens);
+    let ast = tokens_to_ast(&mut tokens.clone(), &mut FilePosition::default());
+    dbg!(&ast);
+    let result = eval(&ast, &mut State::default());
+    dbg!(&result);
+    dbg!(&expression);
     // println!("{input:?}\n");
     // println!("{tokens:?}\n");
     // println!("{ast:?}\n");
