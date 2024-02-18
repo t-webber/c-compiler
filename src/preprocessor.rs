@@ -1,115 +1,12 @@
-use std::clone::Clone;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
-use crate::eval::{eval, tokens_to_ast};
+use crate::errors::{FilePosition, GeneralError, PreprocessorError};
 use crate::parser::parse_preprocessor;
-use crate::tools::{FilePosition, GeneralError, PreprocessorError};
-
-/// Preprocessor Directive Parsing State
-///
-#[derive(PartialEq, Default, Debug)]
-pub enum Pips {
-    #[default]
-    None,
-    DirectiveName(String),
-    DirectiveArgs(Vec<String>),
-    DirectiveValue(String),
-}
-
-#[derive(Default, Debug)]
-pub struct StoreDirective {
-    values: Vec<String>,
-}
-
-#[derive(Debug, Default)]
-pub enum Directive {
-    #[default]
-    None,
-    Define {
-        macro_name: String,
-        macro_args: Vec<String>,
-        macro_value: String,
-    },
-    IfDef {
-        macro_name: String,
-    },
-    IfnDef {
-        macro_name: String,
-    },
-    If {
-        expression: bool,
-    },
-    Elif {
-        expression: bool,
-    },
-    Include {
-        filename: String,
-    },
-    Undef {
-        macro_name: String,
-    },
-    Warning {
-        message: String,
-    },
-    Pragma {
-        message: String,
-    },
-    Else,
-    EndIf,
-    Error {
-        message: String,
-    },
-}
-
-#[derive(Default, Debug)]
-pub struct State {
-    comment_level: u32,
-    inline_comment: bool,
-    directive_parsing: Pips,
-    comment_unclosed_positon: Vec<FilePosition>,
-    pub defines: HashMap<String, MacroValue>,
-    if_writing: bool,
-    if_level: u32,
-    include_stack: Vec<FilePosition>,
-    pub current_position: FilePosition,
-}
-
-impl State {
-    fn new_file(&mut self, filename: String, filepath: String) {
-        self.include_stack.push(self.current_position.clone());
-
-        self.current_position.filename = filename;
-        self.current_position.filepath = filepath;
-        self.current_position.col = 0;
-        self.current_position.line = 0;
-        self.if_level = 0;
-        self.if_writing = true;
-    }
-
-    fn end_file(&mut self) {
-        self.include_stack.pop();
-    }
-}
-
-#[derive(Debug)]
-pub enum MacroValue {
-    String(String),
-    Function { args: Vec<String>, body: String },
-}
-
-impl Clone for FilePosition {
-    fn clone(&self) -> Self {
-        Self {
-            line: self.line,
-            col: self.col,
-            filename: self.filename.clone(),
-            filepath: self.filepath.clone(),
-        }
-    }
-}
+use crate::structs::{Directive, MacroValue, Pips, State, StoreDirective};
+use crate::ternary::{eval_all, vec2ternary_ast};
 
 #[rustfmt::skip]
 pub fn deal_with_c(c: char, state: &mut State, current_directive: &mut StoreDirective) -> String {
@@ -196,7 +93,7 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
             return File::open(filepath).expect("Failed to open file from local directory");
         }
     }
-    panic!("Header not found")
+    panic!("Header not found: {filename}");
 }
 
 fn preprocess_include(filename: &String, state: &mut State) -> String {
@@ -298,15 +195,15 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
             macro_name: String::from(*macro_name),
         },
         ["if", expression_string] => {
-            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &mut state.current_position);
+            let ast = vec2ternary_ast(parse_preprocessor(expression_string));
             Directive::If {
-                expression: eval(&ast, state) != 0,
+                expression: eval_all(&ast, state) != 0,
             }
         }
         ["elif", expression_string] => {
-            let ast = tokens_to_ast(&mut parse_preprocessor(expression_string), &mut state.current_position);
+            let ast = vec2ternary_ast(parse_preprocessor(expression_string));
             Directive::Elif {
-                expression: eval(&ast, state) != 0,
+                expression: eval_all(&ast, state) != 0,
             }
         }
         ["endif"] => Directive::EndIf {},
@@ -377,11 +274,10 @@ fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
         Directive::Elif { expression } => {
             if state.if_writing {
                 state.if_writing = false;
-                String::new()
             } else {
                 state.if_writing = *expression;
-                String::new()
             }
+            String::new()
         }
         Directive::Include { filename } => preprocess_include(filename, state),
         Directive::Undef { macro_name } => {

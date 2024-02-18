@@ -1,0 +1,1 @@
+/mnt/d/files/dev/rust/CCompiler/build/wsl/debug/compilo: /mnt/d/files/dev/rust/CCompiler/src/errors.rs /mnt/d/files/dev/rust/CCompiler/src/eval.rs /mnt/d/files/dev/rust/CCompiler/src/main.rs /mnt/d/files/dev/rust/CCompiler/src/parser.rs /mnt/d/files/dev/rust/CCompiler/src/preprocessor.rs /mnt/d/files/dev/rust/CCompiler/src/structs.rs /mnt/d/files/dev/rust/CCompiler/src/ternary.rs

@@ -1,0 +1,1 @@
+D:\files\dev\rust\CCompiler\build\win\debug\compilo.exe: D:\files\dev\rust\CCompiler\src\errors.rs D:\files\dev\rust\CCompiler\src\eval.rs D:\files\dev\rust\CCompiler\src\main.rs D:\files\dev\rust\CCompiler\src\parser.rs D:\files\dev\rust\CCompiler\src\preprocessor.rs D:\files\dev\rust\CCompiler\src\structs.rs D:\files\dev\rust\CCompiler\src\ternary.rs

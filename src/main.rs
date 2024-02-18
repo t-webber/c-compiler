@@ -1,28 +1,26 @@
-// #![allow(unused)]
+#![allow(unused)]
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::{env, fs::File};
-mod preprocessor;
-mod tools;
 
-// mod expression;
-mod parser;
-use parser::parse_preprocessor;
+mod errors;
 mod eval;
-use crate::eval::{eval, tokens_to_ast};
-use preprocessor::State;
-use tools::FilePosition;
+mod parser;
+mod preprocessor;
+mod structs;
+mod ternary;
 
 fn main() {
+    println!("Hello, world!");
     //-> std::io::Result<()> {
-    // run_main("./test/fichier.c")
+    run_main("./test/fichier.c");
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
-    test_parser(
-        env::args()
-            .collect::<Vec<String>>()
-            .get(1)
-            .map_or("1==2", |f| f.as_str()),
-    );
+    // test_parser(
+    //     env::args()
+    //         .collect::<Vec<String>>()
+    //         .get(1)
+    //         .map_or("1==2", |f| f.as_str()),
+    // );
 }
 
 #[allow(unused)]
@@ -38,16 +36,20 @@ fn run_main(path: &str) -> std::io::Result<()> {
 #[allow(unused)]
 fn test_parser(expression: &str) {
     let input = String::from(expression);
-    dbg!(&input);
-    let tokens = parse_preprocessor(&input);
-    dbg!(&tokens);
-    let ast = tokens_to_ast(&mut tokens.clone(), &mut FilePosition::default());
-    dbg!(&ast);
-    let result = eval(&ast, &mut State::default());
-    dbg!(&result);
-    dbg!(&expression);
-    // println!("{input:?}\n");
-    // println!("{tokens:?}\n");
-    // println!("{ast:?}\n");
-    // println!("{result:?}\n");
+    // dbg!(&input);
+    let tokens = parser::parse_preprocessor(&input);
+    // dbg!(&tokens);
+    let tast = ternary::vec2ternary_ast(tokens);
+    dbg!(&tast);
+    let res = ternary::eval_all(&tast, &mut structs::State::default());
+    dbg!(&res);
+    //     let ast = tokens_to_ast(&mut tokens.clone(), &mut FilePosition::default());
+    //     dbg!(&ast);
+    //     let result = eval(&ast, &mut State::default());
+    //     dbg!(&result);
+    //     dbg!(&expression);
+    //     // println!("{input:?}\n");
+    //     // println!("{tokens:?}\n");
+    //     // println!("{ast:?}\n");
+    //     // println!("{result:?}\n");
 }
