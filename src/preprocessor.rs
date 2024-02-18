@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
-use crate::errors::{FilePosition, GeneralError, PreprocessorError};
+use crate::errors::{GeneralError, PreprocessorError};
 use crate::parser::parse_preprocessor;
 use crate::structs::{Directive, MacroValue, Pips, State, StoreDirective};
 use crate::ternary::{eval_all, vec2ternary_ast};
@@ -63,11 +62,10 @@ fn preprocess_define(directive: &Directive, state: &mut State) -> String {
     if let Directive::Define { macro_name, macro_args, macro_value } = directive {
         if macro_args.is_empty() {
             state.defines.insert(macro_name.clone(), MacroValue::String(macro_value.clone()));
-            String::new()
         } else {
             state.defines.insert(macro_name.clone(), MacroValue::Function { args: macro_args.clone(), body: macro_value.clone() });
-            String::new()
-        }
+        };
+        String::new()
     } else {
         panic!("Not a define directive");
     }

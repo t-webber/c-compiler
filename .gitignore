@@ -2,3 +2,6 @@ target
 .vscode
 Cargo.lock
 doc/.build
+rust_doc/.*
+rust_doc/CACHEDIR.TAG
+rust_doc/debug

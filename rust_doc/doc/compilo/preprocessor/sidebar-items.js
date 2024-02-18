@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DirectiveParsingState"],"fn":["add_default_macro","convert_define_from_store","convert_from_store","deal_with_c","look_for_file","preprocess","preprocess_character","preprocess_define","preprocess_directive","preprocess_include","preprocess_unit"]};

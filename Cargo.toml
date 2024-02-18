@@ -2,6 +2,12 @@
 name = "compilo"
 version = "0.1.0"
 edition = "2021"
+repository = "https://www.gitlab.com/t-webber/compilo-en-rust"
+readme = "."
+description = "A compiler for the C language"
+keywords = ["compiler", "c", "language"]
+categories = ["development-tools", "programming-language"]
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

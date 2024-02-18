@@ -35,7 +35,7 @@
 // }
 
 #[allow(unused)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operator {
     // Unary
     Plus,
@@ -87,11 +87,11 @@ pub enum Associativity {
 }
 
 impl Operator {
-    pub fn max_precedence() -> u32 {
+    pub const fn max_precedence() -> u32 {
         15
     }
 
-    pub fn precedence(&self) -> u32 {
+    pub const fn precedence(&self) -> u32 {
         match self {
             Self::Defined => 0,
 
@@ -141,7 +141,7 @@ impl Operator {
         }
     }
 
-    pub fn associativity(&self) -> Associativity {
+    pub const fn associativity(&self) -> Associativity {
         match self {
             Self::Plus
             | Self::Minus
