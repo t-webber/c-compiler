@@ -1,0 +1,49 @@
+main:
+        clear
+        $env:CARGO_TARGET_DIR=".build/win"
+        cargo run -- $1 $2 $3 $4 $5 $6 $7 $8 $9
+!
+
+y:
+        clear
+        $env:CARGO_TARGET_DIR=".build/win"
+        cargo clean
+        cargo clippy --all -- -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::correctness -W clippy::complexity -W clippy::perf -W clippy::style -W clippy::suspicious
+        cargo run -- $1 $2 $3 $4 $5 $6 $7 $8 $9
+!
+
+
+wsl:
+        clear
+        export CARGO_TARGET_DIR=".build/wsl"
+        cargo run -- $1 $2 $3 $4 $5 $6 $7 $8 $9
+!
+
+wsly:
+        clear
+        export CARGO_TARGET_DIR=".build/wsl"
+        cargo clean
+        cargo clippy --all -- -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::cargo -W clippy::correctness -W clippy::complexity -W clippy::perf -W clippy::style -W clippy::suspicious
+        cargo run -- $1 $2 $3 $4 $5 $6 $7 $8 $9
+!
+
+gcc: 
+        clear
+        value=$(gcc -Wall -pedantic -std=c99 -O0 ./test/file.c -E)
+        echo "$value" > ./test/gcc.i
+!
+
+wslgcc: 
+        clear
+        value=$(gcc -Wall -pedantic -std=c99 -O0 ./test/file.c -E)
+        echo -e "$value" > ./test/gcc.i
+!
+
+
+doc:
+        $env:CARGO_TARGET_DIR="docs/cargo"
+        cargo doc
+
+wsldoc:
+        export CARGO_TARGET_DIR="docs/cargo"
+        cargo doc

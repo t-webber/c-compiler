@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["main","run_main","test_parser"],"mod":["errors","eval","parser","preprocessor","structs","ternary"]};

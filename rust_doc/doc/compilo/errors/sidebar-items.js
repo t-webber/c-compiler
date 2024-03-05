@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["GeneralError","PreprocessorError"],"struct":["FilePosition"]};

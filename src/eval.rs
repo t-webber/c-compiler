@@ -125,6 +125,8 @@ fn tokens_to_ast_impl(
     previous_operator: Option<&Operator>, current_position: &mut FilePosition, parenthesis_level: &mut usize,
 ) -> PreprocessorAst {
     let previous_precedence = previous_operator.map_or_else(Operator::max_precedence, Operator::precedence);
+    // eprintln!(">>>>>>>>>>>> IN = {acc:?}\t at index {index:?}");
+    let result = {
     if let Some(token) = tokens.get(*index) {
         *index += 1;
         match token {
@@ -186,6 +188,7 @@ fn tokens_to_ast_impl(
                         };
                         // We use the precedence we received because of associativity
                         tokens_to_ast_impl_or_acc3(tokens, index, unary_operator, acc3,previous_operator, current_position, parenthesis_level)
+                        // unary_operator
                     } else {
                         // We were in a situation like
                         // a!b + ... : we read !
@@ -210,7 +213,8 @@ fn tokens_to_ast_impl(
                         tokens, index, PreprocessorAst::Empty, &mut Box::new(PreprocessorAst::Empty),
                         None, current_position, parenthesis_level,
                     );
-                    tokens_to_ast_impl_or_acc3(tokens, index, next, acc3, None, current_position, parenthesis_level)
+                    next
+                    // tokens_to_ast_impl_or_acc3(tokens, index, next, acc3, None, current_position, parenthesis_level)
                     // tokens_to_ast_impl(tokens, index, acc, acc3, None, current_position, parenthesis_level)
                 }
                 Bracing::RightParenthesis => {
@@ -233,6 +237,9 @@ fn tokens_to_ast_impl(
     } else {
         acc
     }
+};
+// println!(">>>>>>>>>>>> OUT = {result:?}");
+    result
 }
 
 // #[rustfmt::skip]
@@ -371,8 +378,8 @@ pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut State) -> i32 {
             },
             #[allow(clippy::cast_possible_truncation)]
             PreprocessorToken::LiteralNumber(x) => x.floor() as i32,
-            PreprocessorToken::LiteralString(_) => panic!("{}", PreprocessorError::StringsNotAllowed.fail(&state.current_position)),
-            _ => panic!("{}", PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail(&state.current_position)),
+            PreprocessorToken::LiteralString(_) => PreprocessorError::StringsNotAllowed.fail_with_panic(&state.current_position),
+            _ => PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_panic(&state.current_position),
         },
     }
 }

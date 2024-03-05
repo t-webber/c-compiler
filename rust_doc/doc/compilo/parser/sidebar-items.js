@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Associativity","Bracing","NonOpSymbol","Operator","PreprocessorToken"],"fn":["is_not_operator","parse_preprocessor","token_from_str"]};

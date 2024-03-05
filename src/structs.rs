@@ -103,4 +103,8 @@ impl Clone for FilePosition {
             filepath: self.filepath.clone(),
         }
     }
+
+    fn clone_from(&mut self, source: &Self) {
+        *self = source.clone();
+    }
 }

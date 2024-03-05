@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["FullAst"],"fn":["eval_all","get_second_third","vec2ternary_ast"]};

@@ -37,7 +37,7 @@ pub fn preprocess_character(c: char, state: &mut State, previous_char: &mut char
     *previous_char = c;
     let character = match c {
         '/' if prev =='*' && in_comment => {state.comment_level=state.comment_level.checked_sub(1).expect("*/ unmatched");*previous_char=' ';state.inline_comment=false;String::new()},
-        '/' if prev =='*' => {panic!("*/ unmatched")},
+        '/' if prev =='*' => { GeneralError::UnclosedComment { file_position: &state.current_position, level: state.comment_level }.fail_with_panic(&state.current_position)},
         '/' if prev =='/' => {state.inline_comment=true;*previous_char=' ';String::new()} ,
         '*' if prev =='/' => {state.comment_level+=1;state.comment_unclosed_positon.push(state.current_position.clone());*previous_char=' ';String::new()},
         _ if (prev=='/' || prev=='*') && in_comment => {  String::new() },
@@ -67,7 +67,7 @@ fn preprocess_define(directive: &Directive, state: &mut State) -> String {
         };
         String::new()
     } else {
-        panic!("Not a define directive");
+        PreprocessorError::Internal("not a define directive").fail_with_panic(&state.current_position);
     }
 }
 
@@ -75,7 +75,7 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
     let places: Vec<PathBuf> = vec![
         PathBuf::from(&state.current_position.filepath)
             .parent()
-            .unwrap()
+            .expect("Invalid path")
             .to_owned(),
         PathBuf::from("/usr/include/"),
         PathBuf::from("/usr/local/include/"),
@@ -86,16 +86,16 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
         if filepath.exists() {
             state.new_file(
                 filename.clone(),
-                String::from(filepath.as_os_str().to_str().unwrap()),
+                String::from(filepath.as_os_str().to_str().expect("Invalid path")),
             );
             return File::open(filepath).expect("Failed to open file from local directory");
         }
     }
-    panic!("Header not found: {filename}");
+    PreprocessorError::FileNotFound(filename).fail_with_panic(&state.current_position);
 }
 
 fn preprocess_include(filename: &String, state: &mut State) -> String {
-    let mut content: String = String::new();
+    let mut content = String::new();
     let old_position = state.current_position.clone();
     look_for_file(filename, state)
         .read_to_string(&mut content)
@@ -167,7 +167,7 @@ fn convert_define_from_store(values: &&str) -> Directive {
     if value.is_empty() {
         value = format!(
             "({})",
-            args.iter().fold(String::new(), |acc, s| acc + s.as_str())
+            args.iter().fold(String::new(), |acc, curr_string| acc + curr_string.as_str())
         );
         args.clear();
     }
@@ -228,7 +228,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
         ["pragma", message] => Directive::Pragma {
             message: String::from(*message),
         },
-        x => panic!("Not a valid directive : {x:?}"),
+        x => PreprocessorError::DirectiveUnknown(&x.join("")).fail_with_panic(&state.current_position),
     }
 }
 
@@ -291,26 +291,26 @@ fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
             String::new()
         }
         Directive::Error { message } => {
-            dbg!("{:?}\n", &state);
-            panic!("{}", PreprocessorError::DirectiveError(message).fail(&state.current_position));
+            // dbg!("{:?}\n", &state);
+            PreprocessorError::DirectiveError(message).fail_with_panic(&state.current_position);
         }
         Directive::Warning { message } => {
-            eprintln!("{}", PreprocessorError::DirectiveWarning(message).fail(&state.current_position));
+            PreprocessorError::DirectiveWarning(message).fail_with_warning(&state.current_position);
             String::new()
         }
         Directive::Pragma { message } => {
-            eprintln!("{}", PreprocessorError::DirectiveUnknown(message).fail(&state.current_position));
+            PreprocessorError::DirectiveUnknown(message).fail_with_warning(&state.current_position);
             String::new()
         }
         Directive::None => 
-            panic!("{}", PreprocessorError::DirectiveNameMissing.fail(&state.current_position)),
+            PreprocessorError::DirectiveNameMissing.fail_with_panic(&state.current_position),
     }
 }
 
 #[rustfmt::skip]
 pub fn preprocess(content: &str, state: &mut State) -> String {
     let mut lines: Vec<(u32, String)> = vec![];
-    let mut previous_line_escaped: bool = false;
+    let mut previous_line_escaped = false;
     let mut line_number: u32 = 1;
     for line in content.lines() {
         let escaped = line.ends_with('\\');
@@ -334,19 +334,19 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
 
     let processed_file = lines
         .iter()
-        .map(|(line_number, line)| {
+        .map(|(curr_line_nb, line)| {
             state.current_position.col = 0;
-            state.current_position.line = *line_number;
+            state.current_position.line = *curr_line_nb;
             state.inline_comment = false;
             state.directive_parsing = Pips::None;
             let mut current_directive = StoreDirective::default();
             let line_string = line.to_string();
-            let mut previous_char: char = ' ';
+            let mut previous_char = ' ';
             let mut preprocessed_line = line_string
                 .chars()
-                .map(|c| {
+                .map(|ch| {
                     state.current_position.col += 1;
-                    preprocess_character(c, state, &mut previous_char, &mut current_directive)
+                    preprocess_character(ch, state, &mut previous_char, &mut current_directive)
                 })
                 .collect::<String>();
             if !preprocessed_line.trim().is_empty() {
@@ -373,7 +373,7 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
     assert!(
         state.comment_level == 0,
         "{}",
-        GeneralError::UnclosedComment(state.comment_unclosed_positon.last().unwrap(), state.comment_level.to_string().as_str()).fail(&state.current_position)
+        GeneralError::UnclosedComment { file_position: state.comment_unclosed_positon.last().expect("Error raised but everything is fine!"), level: state.comment_level }.fail(&state.current_position)
     );
     state.end_file();
     processed_file
@@ -539,7 +539,7 @@ fn add_default_macro(state: &mut State) {
 }
 
 pub fn preprocess_unit(filepath: PathBuf) -> String {
-    let mut content: String = String::new();
+    let mut content = String::new();
     File::open(&filepath)
         .expect("Failed to read the file")
         .read_to_string(&mut content)
@@ -552,11 +552,14 @@ pub fn preprocess_unit(filepath: PathBuf) -> String {
     state.new_file(
         filepath
             .file_name()
-            .unwrap()
+            .expect("Invalid filepath")
             .to_owned()
             .into_string()
-            .unwrap(),
-        filepath.into_os_string().into_string().unwrap(),
+            .expect("Invalid filename"),
+        filepath
+            .into_os_string()
+            .into_string()
+            .expect("Invalid path"),
     );
     preprocess(&content, &mut state)
 }

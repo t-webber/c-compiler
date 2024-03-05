@@ -8,8 +8,11 @@ pub struct FilePosition {
 
 #[allow(unused)]
 #[derive(Debug)]
-pub enum GeneralError<'a> {
-    UnclosedComment(&'a FilePosition, &'a str), // (start, level)
+pub enum GeneralError<'msg> {
+    UnclosedComment {
+        file_position: &'msg FilePosition,
+        level: u32,
+    },
     UnclosedString,
     UnclosedChar,
     UnclosedParenthesis,
@@ -19,11 +22,11 @@ pub enum GeneralError<'a> {
 }
 
 #[rustfmt::skip]
-impl<'a> GeneralError<'a> {
+impl<'msg> GeneralError<'msg> {
     fn get_code(&self) -> (u32, String) {
         match self {
-            GeneralError::UnclosedComment(start, level) => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
-                                                                                                start.filepath, start.line, start.col)),
+            GeneralError::UnclosedComment {file_position , level} => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
+                                                                                                file_position.filepath, file_position.line, file_position.col)),
             GeneralError::UnclosedString => (2, String::from("unclosed string")),
             GeneralError::UnclosedChar => (3, String::from("unclosed char")),
             GeneralError::UnclosedParenthesis => (4, String::from("unclosed parenthesis")),
@@ -36,38 +39,42 @@ impl<'a> GeneralError<'a> {
 
 #[allow(unused)]
 #[derive(Debug)]
-pub enum PreprocessorError<'a> {
+pub enum PreprocessorError<'msg> {
+    Internal(&'msg str),
+    //
     DirectiveNameMissing,
     InvalidSharpPosition,
     //
-    InvalidFileName(&'a str),
-    FileNotFound(&'a str),
-    FileNotReadable(&'a str),
+    InvalidFileName(&'msg str),
+    FileNotFound(&'msg str),
+    FileNotReadable(&'msg str),
     //
-    InvalidMaxcroName(&'a str),
+    InvalidMaxcroName(&'msg str),
     MacroArgsNotClosed,
-    MacroNotDefined(&'a str),
+    MacroNotDefined(&'msg str),
     //
-    IncompleteOperator(&'a str),
-    InvalidOperator(&'a str),
+    IncompleteOperator(&'msg str),
+    InvalidOperator(&'msg str),
     DefinedChildNotLeaf,
     DefinedChildNotMacro,
-    InvalidLeaf(&'a str),
+    InvalidLeaf(&'msg str),
     StringsNotAllowed,
     //
     ElifWithoutIf,
     ElseWithoutIf,
     EndifWithoutIf,
     //
-    DirectiveError(&'a str),
-    DirectiveWarning(&'a str),
-    DirectiveUnknown(&'a str),
+    DirectiveError(&'msg str),
+    DirectiveWarning(&'msg str),
+    DirectiveUnknown(&'msg str),
 }
 
 #[rustfmt::skip]
-impl<'a> PreprocessorError<'a> {
-    fn get_code(&'a self) -> (u32, String) {
+impl<'msg> PreprocessorError<'msg> {
+    fn get_code(&'msg self) -> (u32, String) {
         match self {
+            PreprocessorError::Internal(message) => (99, format!("internal error: {message}.\nPlease raise an issue") ),
+
             PreprocessorError::DirectiveNameMissing => (1, String::from("directive name missing")),
             PreprocessorError::InvalidSharpPosition => (2, String::from("invalid sharp position")),
             //
@@ -98,29 +105,40 @@ impl<'a> PreprocessorError<'a> {
 }
 
 #[rustfmt::skip]
-impl<'a> GeneralError<'a> {
+impl<'msg> GeneralError<'msg> {
         pub fn fail(self, current_position: &FilePosition) -> String {
             let (code, message) = self.get_code();
-            String::from("\n")
-                + &format!(
-                    "[ERROR: {:0>3}]\t{}:{}:{}   {:?}",
-                    10+code, current_position.filepath, current_position.line, current_position.col, message
-                )
-        }
-    }
-
-#[rustfmt::skip]
-impl<'a> PreprocessorError<'a> {
-        pub fn fail(self, current_position: &FilePosition) -> String {
-            let (code, message) = self.get_code();
-            String::from("\n")
-                + &format!(
-                    "[ERROR {:0>3}]\t{}:{}:{}   {:?}",
-                    100+code, current_position.filepath, current_position.line, current_position.col, message
+            format!(
+                    "\n[ERROR: {:0>3}]\t{}:{}:{}   {:?}",
+                    code.checked_add(10).unwrap_or(10), current_position.filepath, current_position.line, current_position.col, message
                 )
         }
 
         pub fn fail_with_panic(self, current_position: &FilePosition) -> ! {
-            panic!("{}", self.fail(current_position))
+            panic!("{}", self.fail(current_position));
+        }
+
+        pub fn fail_with_warning(self, current_position: &FilePosition) {
+            eprintln!("{}", self.fail(current_position));
+        }
+    }
+
+#[allow(clippy::panic)]
+#[rustfmt::skip]
+impl<'msg> PreprocessorError<'msg> {
+        pub fn fail(self, current_position: &FilePosition) -> String {
+            let (code, message) = self.get_code();
+             format!(
+                    "\n[ERROR {:0>3}]\t{}:{}:{}   {:?}",
+                    code.checked_add(100).unwrap_or(100), current_position.filepath, current_position.line, current_position.col, message
+                )
+        }
+
+        pub fn fail_with_panic(self, current_position: &FilePosition) -> ! {
+            panic!("{}", self.fail(current_position));
+        }
+        
+        pub fn fail_with_warning(self, current_position: &FilePosition) {
+            eprintln!("{}", self.fail(current_position));
         }
     }
