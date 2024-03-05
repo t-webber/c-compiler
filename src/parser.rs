@@ -35,7 +35,7 @@
 // }
 
 #[allow(unused)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operator {
     // Unary
     Plus,
@@ -80,86 +80,83 @@ pub enum Operator {
     Defined,
 }
 
-#[derive(PartialEq)]
+#[derive(Eq, PartialEq)]
 pub enum Associativity {
     LeftToRight,
     RightToLeft,
 }
 
 impl Operator {
-    pub fn max_precedence() -> u32 {
+    pub const fn max_precedence() -> u32 {
         15
     }
 
-    pub fn precedence(&self) -> u32 {
+    pub const fn precedence(&self) -> u32 {
         match self {
-            Operator::Defined => 0,
+            Self::Defined => 0,
 
-            Operator::Increment | Operator::Decrement => 1,
+            Self::Increment | Self::Decrement => 1,
             // ()
             // []
             // . ->
             // (type){elt}
             //
             // prefix increment / decrement
-            Operator::Plus | Operator::Minus | Operator::Not | Operator::BitwiseNot => 2,
+            Self::Plus | Self::Minus | Self::Not | Self::BitwiseNot => 2,
             // (cast)
             // * & sizeof _alignof
             //
-            Operator::Mul | Operator::Div | Operator::Mod => 3,
+            Self::Mul | Self::Div | Self::Mod => 3,
             //
-            Operator::Add | Operator::Sub => 4,
+            Self::Add | Self::Sub => 4,
             //
-            Operator::ShiftLeft | Operator::ShiftRight => 5,
+            Self::ShiftLeft | Self::ShiftRight => 5,
             //
-            Operator::LessThan
-            | Operator::LessEqual
-            | Operator::GreaterThan
-            | Operator::GreaterEqual => 6,
+            Self::LessThan | Self::LessEqual | Self::GreaterThan | Self::GreaterEqual => 6,
             //
-            Operator::Eequal | Operator::NotEqual => 7,
+            Self::Eequal | Self::NotEqual => 7,
 
-            Operator::BitwiseAnd => 8,
+            Self::BitwiseAnd => 8,
 
-            Operator::BitwiseXor => 9,
+            Self::BitwiseXor => 9,
 
-            Operator::BitwiseOr => 10,
+            Self::BitwiseOr => 10,
 
-            Operator::And => 11,
+            Self::And => 11,
 
-            Operator::Or => 12,
+            Self::Or => 12,
 
-            Operator::Conditional => 13,
+            Self::Conditional => 13,
 
-            Operator::AddAssign
-            | Operator::SubAssign
-            | Operator::MulAssign
-            | Operator::DivAssign
-            | Operator::ModAssign
-            | Operator::OrAssign
-            | Operator::AndAssign
-            | Operator::XorAssign
-            | Operator::ShiftLeftAssign
-            | Operator::ShiftRightAssign => 14,
+            Self::AddAssign
+            | Self::SubAssign
+            | Self::MulAssign
+            | Self::DivAssign
+            | Self::ModAssign
+            | Self::OrAssign
+            | Self::AndAssign
+            | Self::XorAssign
+            | Self::ShiftLeftAssign
+            | Self::ShiftRightAssign => 14,
         }
     }
 
-    pub fn associativity(&self) -> Associativity {
+    pub const fn associativity(&self) -> Associativity {
         match self {
-            Operator::Plus
-            | Operator::Minus
-            | Operator::Not
-            | Operator::BitwiseNot
-            | Operator::Conditional
-            | Operator::AddAssign
-            | Operator::SubAssign
-            | Operator::DivAssign
-            | Operator::ModAssign
-            | Operator::OrAssign
-            | Operator::AndAssign
-            | Operator::XorAssign
-            | Operator::ShiftLeftAssign
-            | Operator::ShiftRightAssign => Associativity::RightToLeft,
+            Self::Plus
+            | Self::Minus
+            | Self::Not
+            | Self::BitwiseNot
+            | Self::Conditional
+            | Self::AddAssign
+            | Self::SubAssign
+            | Self::DivAssign
+            | Self::ModAssign
+            | Self::OrAssign
+            | Self::AndAssign
+            | Self::XorAssign
+            | Self::ShiftLeftAssign
+            | Self::ShiftRightAssign => Associativity::RightToLeft,
             _ => Associativity::LeftToRight,
         }
     }
@@ -175,7 +172,7 @@ impl Operator {
 //     SpecialSymbol,
 // }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Bracing {
     LeftParenthesis,
     RightParenthesis,
@@ -185,7 +182,7 @@ pub enum Bracing {
     RightBrace,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NonOpSymbol {
     Interrogation,
     Colon,
