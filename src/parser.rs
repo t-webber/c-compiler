@@ -157,7 +157,28 @@ impl Operator {
             | Self::XorAssign
             | Self::ShiftLeftAssign
             | Self::ShiftRightAssign => Associativity::RightToLeft,
-            _ => Associativity::LeftToRight,
+            Self::Add
+            | Self::Sub
+            | Self::Mul
+            | Self::Div
+            | Self::Mod
+            | Self::BitwiseAnd
+            | Self::BitwiseOr
+            | Self::BitwiseXor
+            | Self::And
+            | Self::Or
+            | Self::ShiftLeft
+            | Self::ShiftRight
+            | Self::Increment
+            | Self::Decrement
+            | Self::NotEqual
+            | Self::Eequal
+            | Self::LessThan
+            | Self::GreaterThan
+            | Self::LessEqual
+            | Self::GreaterEqual
+            | Self::MulAssign
+            | Self::Defined => Associativity::LeftToRight,
         }
     }
 }
@@ -188,22 +209,22 @@ pub enum NonOpSymbol {
     Colon,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreprocessorToken {
     Operator(Operator),
     Bracing(Bracing),
     LiteralString(String),
-    LiteralNumber(f32),
+    LiteralNumber(i32),
     Macro(String),
     NonOpSymbol(NonOpSymbol),
 }
 
-fn is_not_operator(c: char) -> bool {
+fn is_not_operator(ch: char) -> bool {
     const OPERATORS: [char; 26] = [
         ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']',
         '=', ',', ';', ':', '?', '~', '#', '\\',
     ];
-    !OPERATORS.contains(&c)
+    !OPERATORS.contains(&ch)
 }
 
 fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
@@ -214,7 +235,7 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
 
     let token = if let Ok(number) = token_str.parse::<f32>() {
         if no_operator {
-            PreprocessorToken::LiteralNumber(number)
+            PreprocessorToken::LiteralNumber(number.floor() as i32)
         } else {
             return None;
         }
@@ -267,21 +288,21 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
                     && token_str
                         .char_indices()
                         .skip(1)
-                        .all(|(i, c)| c != '\"' || i == (token_str.len() - 1)))
+                        .all(|(i, ch)| ch != '\"' || i == (token_str.len() - 1)))
                     || (token_str.starts_with('\'')
                         && token_str
                             .char_indices()
                             .skip(1)
-                            .all(|(i, c)| c != '\'' || i == (token_str.len() - 1)))
+                            .all(|(i, ch)| ch != '\'' || i == (token_str.len() - 1)))
                 {
                     PreprocessorToken::LiteralString(
                         token_str
                             .get(1..token_str.len() - 1)
                             .expect("Catastrophic failure")
-                            .to_string(),
+                            .to_owned(),
                     )
                 } else if no_operator {
-                    PreprocessorToken::Macro(token_str.to_string())
+                    PreprocessorToken::Macro(token_str.to_owned())
                 } else {
                     return None;
                 }
@@ -294,9 +315,10 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
 #[rustfmt::skip]
 pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
     let mut tokens: Vec<PreprocessorToken> = vec![];
-    let mut current_token: String = String::new();
-    string.chars().for_each(|c| {
-        let new_token = current_token.clone() + &String::from(c);
+    let mut current_token = String::new();
+    string.chars().for_each(|ch| {
+        let mut new_token = current_token.clone();
+        new_token.push(ch);
         // println!("Current = {current_token:?} and new = {new_token:?}");
         if token_from_str(&new_token).is_some() {
             current_token = new_token;
@@ -304,11 +326,11 @@ pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
         } else if let Some(token) = token_from_str(&current_token) {
             tokens.push(token);
             current_token.clear();
-            current_token.push(c);
+            current_token.push(ch);
             // println!("Chose current");
         } else {
             current_token.clear();
-            current_token.push(c);
+            current_token.push(ch);
             // println!("Chose none");
         }
     });

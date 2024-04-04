@@ -72,23 +72,25 @@ impl FullAstElt {
 }
 
 #[rustfmt::skip]
-impl From<Vec<PreprocessorToken>> for FullAstElt {
-    fn from(iter: Vec<PreprocessorToken>) -> Self {
-        let open = Some(iter[0] == PreprocessorToken::Bracing(Bracing::LeftParenthesis));
+impl TryFrom<Vec<PreprocessorToken>> for FullAstElt {
+    fn try_from(iter: Vec<PreprocessorToken>) -> Result<Self, Self::Error> {
+        let open = Some(*iter.get(0).unwrap() == PreprocessorToken::Bracing(Bracing::LeftParenthesis));
         let close = iter[iter.len() - 1] == PreprocessorToken::Bracing(Bracing::LeftParenthesis);
-        Self {
+        Ok(Self {
             elts: iter,
             open,
             close
-        }
+        })
     }
+    
+    type Error = String;
 }
 
 #[rustfmt::skip]
 fn get_second_third(iter: &mut IntoIter<PreprocessorToken>) -> (FullAstElt, FullAstElt) {
     let mut second = FullAstElt::default();
-    let mut question_level = 0_i32;
-    let mut parenthesis_level = 0_i32;
+    let mut question_level = 0_u32;
+    let mut parenthesis_level = 0_u32;
     loop {
         let current = iter.next();
         if second.open.is_none() {second.open = Some(Some(PreprocessorToken::Bracing(Bracing::LeftParenthesis)) == current)};
@@ -96,21 +98,21 @@ fn get_second_third(iter: &mut IntoIter<PreprocessorToken>) -> (FullAstElt, Full
     
         match current {
             Some(token @ PreprocessorToken::Bracing(Bracing::LeftParenthesis)) => {
-                parenthesis_level += 1;
+                parenthesis_level += 1_u32;
                 second.push(token);
             }
             Some(token @ PreprocessorToken::Bracing(Bracing::RightParenthesis)) => {
-                parenthesis_level -= 1;
+                parenthesis_level -= 1_u32;
                 second.push(token);
             }
             Some(token) if parenthesis_level > 0 => second.push(token),
             Some(token @ PreprocessorToken::NonOpSymbol(NonOpSymbol::Interrogation)) => {
-                question_level += 1;
+                question_level += 1_u32;
                 second.push(token);
             }
-            Some(PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon)) if question_level == 0 => break,
+            Some(PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon)) if question_level == 0_u32 => break,
             Some(token @ PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon)) => {
-                question_level -= 1;
+                question_level -= 1_u32;
                 second.push(token);
             }
             Some(token) => second.push(token),
@@ -119,7 +121,7 @@ fn get_second_third(iter: &mut IntoIter<PreprocessorToken>) -> (FullAstElt, Full
     }
     (
         second,
-        FullAstElt::from(iter.collect::<Vec<PreprocessorToken>>()),
+        FullAstElt::try_from(iter.collect::<Vec<PreprocessorToken>>()).unwrap(),
     )
 }
 
@@ -131,19 +133,19 @@ fn vec2ternary_ast_impl(vec: Vec<PreprocessorToken>, close: bool) -> FullAst {
         open: None,
         close,
     };
-    let mut parenthesis_level = 0;
+    let mut parenthesis_level = 0_u32;
     loop {
         let current = iter.next();
         if first.open.is_none() {first.open = Some(Some(PreprocessorToken::Bracing(Bracing::LeftParenthesis)) == current)};
         
         match current {
             Some(token @ PreprocessorToken::Bracing(Bracing::LeftParenthesis)) => {
-                parenthesis_level += 1;
+                parenthesis_level += 1_u32;
                 first.push(token);
                 first.close = false;
             }
             Some(token @ PreprocessorToken::Bracing(Bracing::RightParenthesis)) => {
-                parenthesis_level -= 1;
+                parenthesis_level -= 1_u32;
                 first.push(token);
                 first.close = true;
             }
@@ -154,7 +156,7 @@ fn vec2ternary_ast_impl(vec: Vec<PreprocessorToken>, close: bool) -> FullAst {
                 return FullAst::Node {
                     first: Some(Box::new(first.to_leaf())),
                     second: Some(Box::new(vec2ternary_ast_impl(second.elts, false))),
-                    third: Some(Box::new(vec2ternary_ast_impl(third.elts, parenthesis_level > 0))),
+                    third: Some(Box::new(vec2ternary_ast_impl(third.elts, parenthesis_level > 0_u32))),
                 };
             }
             Some(token) => {first.push(token); first.close = true},
@@ -171,7 +173,7 @@ pub fn vec2ternary_ast(vec: Vec<PreprocessorToken>) -> FullAst {
 pub fn eval_all(no_ternaries_ast: &FullAst, state: &mut State) -> i32 {
     let empty: Box<FullAst> = Box::new(FullAst::Empty);
     match &no_ternaries_ast {
-        FullAst::Empty => 0,
+        FullAst::Empty => 0_i32,
         FullAst::Leaf(tokens) => {
             // dbg!(&tokens);
             let binary_ast = eval::tokens_to_ast(tokens, &mut state.current_position);
@@ -182,7 +184,8 @@ pub fn eval_all(no_ternaries_ast: &FullAst, state: &mut State) -> i32 {
           let ifirst = eval_all(first.as_ref().unwrap_or_else(|| {eprintln!("first is empty"); &empty}), state);
           let isecond = eval_all(second.as_ref().unwrap_or_else(|| {eprintln!("second is empty"); &empty}), state);
           let ithird = eval_all(third.as_ref().unwrap_or_else(|| {eprintln!("third is empty"); &empty}), state);
-          if ifirst == 0 {ithird} else {isecond}
+          if ifirst == 0_i32 {ithird} else {isecond}
         }
     }
 }
+

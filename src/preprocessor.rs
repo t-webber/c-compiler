@@ -4,24 +4,24 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::{GeneralError, PreprocessorError};
 use crate::parser::parse_preprocessor;
+use crate::reader::eval_tokens;
 use crate::structs::{Directive, MacroValue, Pips, State, StoreDirective};
-use crate::ternary::{eval_all, vec2ternary_ast};
 
 #[rustfmt::skip]
-pub fn deal_with_c(c: char, state: &mut State, current_directive: &mut StoreDirective) -> String {
+pub fn deal_with_c(ch: char, state: &mut State, current_directive: &mut StoreDirective) -> String {
     let mut tmp_dir_state = None;
     let res = 
     match &mut state.directive_parsing {
-        Pips::None => String::from(c),
-        Pips::DirectiveName(ref name) if c.is_whitespace() && name.is_empty() => {String::new()},
-        Pips::DirectiveName(ref name) if c.is_whitespace() => {tmp_dir_state = Some(if name.trim()=="define" { Pips::DirectiveArgs(vec![]) } else { Pips::DirectiveValue(String::new()) }); current_directive.values.push(name.clone()); String::new()},
-        Pips::DirectiveName(ref mut name) =>{name.push(c); String::new()},
-        Pips::DirectiveArgs(ref mut args ) if args.is_empty() && c == '(' => {args.push(String::new()); String::new()},
-        Pips::DirectiveArgs(_) if c == '(' => panic!("Nested parenthesis are not supported"),
-        Pips::DirectiveArgs(ref mut args ) if c == ')' => {tmp_dir_state = Some(Pips::DirectiveValue(String::new())); current_directive.values.extend(args.iter().map(Clone::clone)); String::new()},
-        Pips::DirectiveArgs(ref mut args ) if args.is_empty() => {tmp_dir_state = Some(Pips::DirectiveValue(String::from(c))); String::new()},
-        Pips::DirectiveArgs(ref mut args ) => {args.last_mut().expect("Fatal Error: we're fucked!").push(c); String::new()},
-        Pips::DirectiveValue(ref mut value) => {value.push(c); String::new()},
+        Pips::None => String::from(ch),
+        Pips::DirectiveName(name) if ch.is_whitespace() && name.is_empty() => {String::new()},
+        Pips::DirectiveName(name) if ch.is_whitespace() => {tmp_dir_state = Some(if name.trim()=="define" { Pips::DirectiveArgs(vec![]) } else { Pips::DirectiveValue(String::new()) }); current_directive.values.push(name.clone()); String::new()},
+        Pips::DirectiveName(ref mut name) =>{name.push(ch); String::new()},
+        Pips::DirectiveArgs(ref mut args ) if args.is_empty() && ch == '(' => {args.push(String::new()); String::new()},
+        Pips::DirectiveArgs(_) if ch == '(' => panic!("Nested parenthesis are not supported"),
+        Pips::DirectiveArgs(ref mut args ) if ch == ')' => {tmp_dir_state = Some(Pips::DirectiveValue(String::new())); current_directive.values.extend(args.iter().map(Clone::clone)); String::new()},
+        Pips::DirectiveArgs(ref mut args ) if args.is_empty() => {tmp_dir_state = Some(Pips::DirectiveValue(String::from(ch))); String::new()},
+        Pips::DirectiveArgs(ref mut args ) => {args.last_mut().expect("Fatal Error: we're fucked!").push(ch); String::new()},
+        Pips::DirectiveValue(ref mut value) => {value.push(ch); String::new()},
     };
     if let Some(newstate) = tmp_dir_state {
         state.directive_parsing = newstate;
@@ -30,25 +30,25 @@ pub fn deal_with_c(c: char, state: &mut State, current_directive: &mut StoreDire
 }
 
 #[rustfmt::skip]
-pub fn preprocess_character(c: char, state: &mut State, previous_char: &mut char, current_directive: &mut StoreDirective) -> String {
+pub fn preprocess_character(ch: char, state: &mut State, previous_char: &mut char, current_directive: &mut StoreDirective) -> String {
     let in_comment = state.comment_level>0 || state.inline_comment;
     // Match double chars tokens
     let prev = *previous_char;
-    *previous_char = c;
-    let character = match c {
+    *previous_char = ch;
+    let character = match ch {
         '/' if prev =='*' && in_comment => {state.comment_level=state.comment_level.checked_sub(1).expect("*/ unmatched");*previous_char=' ';state.inline_comment=false;String::new()},
         '/' if prev =='*' => { GeneralError::UnclosedComment { file_position: &state.current_position, level: state.comment_level }.fail_with_panic(&state.current_position)},
         '/' if prev =='/' => {state.inline_comment=true;*previous_char=' ';String::new()} ,
         '*' if prev =='/' => {state.comment_level+=1;state.comment_unclosed_positon.push(state.current_position.clone());*previous_char=' ';String::new()},
         _ if (prev=='/' || prev=='*') && in_comment => {  String::new() },
-        _ if prev=='/' || prev=='*' => { deal_with_c(prev, state, current_directive)+deal_with_c(c, state, current_directive).as_str() },
+        _ if prev=='/' || prev=='*' => { deal_with_c(prev, state, current_directive)+deal_with_c(ch, state, current_directive).as_str() },
         '/'|'*' => { String::new() }
         _ if in_comment => { String::new() },
         '#' => match state.directive_parsing {
                 Pips::None => { state.directive_parsing = Pips::DirectiveName(String::new()); String::new() },
-                _ => {deal_with_c(c, state, current_directive)}
+                _ => {deal_with_c(ch, state, current_directive)}
             },
-        _ => { deal_with_c(c, state, current_directive) }
+        _ => { deal_with_c(ch, state, current_directive) }
     };
     if state.if_writing {
         character
@@ -120,22 +120,22 @@ fn convert_define_from_store(values: &&str) -> Directive {
     let mut macro_name = String::new();
     let mut args: Vec<String> = vec![];
     let mut value = String::new();
-    values.chars().for_each(|c| match c {
-        _ if state == DirectiveParsingState::Value => value.push(c),
+    values.chars().for_each(|ch| match ch {
+        _ if state == DirectiveParsingState::Value => value.push(ch),
         '(' if state == DirectiveParsingState::Name || state == DirectiveParsingState::AfterName => {
                     brace_level += 1;
                     state = DirectiveParsingState::Args;
                     args.push(String::new());
-                    value.push(c);
+                    value.push(ch);
                 }
         '(' if brace_level > 0 => {
             state = DirectiveParsingState::Value;
             args.clear();
-            value.push(c);
+            value.push(ch);
         }
         '(' => {
             brace_level += 1;
-            value.push(c);
+            value.push(ch);
         }
         ' ' if state == DirectiveParsingState::Name => state = DirectiveParsingState::AfterName,
         ' ' => {}
@@ -144,24 +144,24 @@ fn convert_define_from_store(values: &&str) -> Directive {
         }
         ')' if brace_level > 1 => {
             brace_level -= 1;
-            value.push(c);
-            args.last_mut().unwrap().push(c);
+            value.push(ch);
+            args.last_mut().unwrap().push(ch);
         }
         ')' if state == DirectiveParsingState::Args => {
             brace_level = brace_level.checked_sub(1).expect("Unmatched (");
             state = DirectiveParsingState::Value;
             value.clear();
         }
-        ')' => value.push(c),
+        ')' => value.push(ch),
         ',' => args.push(String::new()),
-        _ if state == DirectiveParsingState::Name => macro_name.push(c),
+        _ if state == DirectiveParsingState::Name => macro_name.push(ch),
         _ if state == DirectiveParsingState::AfterName => {
             state = DirectiveParsingState::Value;
-            value.push(c);
+            value.push(ch);
         }
         _ => {
-            args.last_mut().unwrap().push(c);
-            value.push(c);
+            args.last_mut().unwrap().push(ch);
+            value.push(ch);
         }
     });
     if value.is_empty() {
@@ -193,15 +193,19 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
             macro_name: String::from(*macro_name),
         },
         ["if", expression_string] => {
-            let ast = vec2ternary_ast(parse_preprocessor(expression_string));
+            // let ast = vec2ternary_ast(parse_preprocessor(expression_string));
+            let res = eval_tokens(&parse_preprocessor(expression_string), state);
             Directive::If {
-                expression: eval_all(&ast, state) != 0,
+                // expression: eval_all(&ast, state) != 0,
+                expression: res != 0,
             }
         }
         ["elif", expression_string] => {
-            let ast = vec2ternary_ast(parse_preprocessor(expression_string));
+            // let ast = vec2ternary_ast(parse_preprocessor(expression_string));
+            let res = eval_tokens(&parse_preprocessor(expression_string), state);
             Directive::Elif {
-                expression: eval_all(&ast, state) != 0,
+                // expression: eval_all(&ast, state) != 0,
+                expression: res != 0,
             }
         }
         ["endif"] => Directive::EndIf {},
@@ -529,6 +533,53 @@ fn add_default_macro(state: &mut State) {
         //
         // System-specific Predefined Macros
         //
+        ("_DEFAULT_SOURCE", "1"),
+        ("_BSD_SOURCE", "1"),
+        ("_SVID_SOURCE", "1"),
+        ("_XOPEN_SOURCE", "600"),
+        ("_XOPEN_SOURCE_EXTENDED", "1"),
+        ("_LARGEFILE_SOURCE", "1"),
+        ("_FILE_OFFSET_BITS", "64"),
+        ("_POSIX_SOURCE", "1"),
+        ("_POSIX_C_SOURCE", "200809L"),
+        ("_ISOC99_SOURCE", "1"),
+        ("_ISOC11_SOURCE", "1"),
+        ("_ISOC2X_SOURCE", "1"),
+        ("_ATFILE_SOURCE", "1"),
+        ("_GNU_SOURCE", "1"),
+        ("_REENTRANT", "1"),
+        ("_THREAD_SAFE", "1"),
+        ("_FORTIFY_SOURCE", "2"),
+        ("_TANDEM_SOURCE", "1"),
+        ("_NETBSD_SOURCE", "1"),
+        ("_OPENBSD_SOURCE", "1"),
+        ("_BSD_SOURCE", "1"),
+        ("_SVID_SOURCE", "1"),
+        ("_XOPEN_SOURCE", "600"),
+        ("_XOPEN_SOURCE_EXTENDED", "1"),
+        ("_LARGEFILE_SOURCE", "1"),
+        ("_FILE_OFFSET_BITS", "64"),
+        ("_POSIX_SOURCE", "1"),
+        ("_POSIX_C_SOURCE", "200809L"),
+        ("_ISOC99_SOURCE", "1"),
+        ("_ISOC11_SOURCE", "1"),
+        ("_ISOC2X_SOURCE", "1"),
+        ("_ATFILE_SOURCE", "1"),
+        ("_GNU_SOURCE", "1"),
+        ("_REENTRANT", "1"),
+        ("_THREAD_SAFE", "1"),
+        ("_FORTIFY_SOURCE", "2"),
+        ("_TANDEM_SOURCE", "1"),
+        ("_NETBSD_SOURCE", "1"),
+        ("_OPENBSD_SOURCE", "1"),
+        ("_POSIX_THREADS", "1"),
+        ("_POSIX_THREAD_SAFE_FUNCTIONS", "1"),
+        ("_POSIX_REENTRANT_FUNCTIONS", "1"),
+        ("_POSIX_C_SOURCE", "200809L"),
+        ("_POSIX_SOURCE", "1"),
+        ("_POSIX_C_SOURCE", "200809L"),
+        ("_POSIX_C_SOURCE", "200809L"),
+        ("_POSIX_C_SOURCE", "200809L"),
     ];
     for (name, value) in macros {
         state.defines.insert(

@@ -114,10 +114,13 @@ impl<'msg> GeneralError<'msg> {
                 )
         }
 
+        #[allow(clippy::panic)]
         pub fn fail_with_panic(self, current_position: &FilePosition) -> ! {
             panic!("{}", self.fail(current_position));
         }
-
+        
+        #[allow(clippy::print_stderr)]
+        #[allow(unused)]
         pub fn fail_with_warning(self, current_position: &FilePosition) {
             eprintln!("{}", self.fail(current_position));
         }

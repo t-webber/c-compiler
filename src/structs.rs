@@ -94,6 +94,7 @@ pub enum MacroValue {
     Function { args: Vec<String>, body: String },
 }
 
+#[allow(clippy::missing_trait_methods)]
 impl Clone for FilePosition {
     fn clone(&self) -> Self {
         Self {
@@ -102,9 +103,5 @@ impl Clone for FilePosition {
             filename: self.filename.clone(),
             filepath: self.filepath.clone(),
         }
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        *self = source.clone();
     }
 }

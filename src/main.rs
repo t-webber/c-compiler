@@ -14,6 +14,8 @@
 #![allow(clippy::question_mark_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::separated_literal_suffix)]
+#![allow(clippy::blanket_clippy_restriction_lints)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use std::fs::File;
 use std::io::{self, Write};
@@ -26,19 +28,20 @@ mod errors;
 mod eval;
 mod parser;
 mod preprocessor;
+mod reader;
 mod structs;
 mod ternary;
 
+#[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), io::Error> {
     run_main("./test/file.c")
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
-    // test_parser(
-    //     env::args().collect::<Vec<String>>().get(1).map_or(
-    //         // "! defined (_FILE_OFFSET_BITS) || _FILE_OFFSET_BITS != 64",
-    //         "! defined (MACRO) || 1",
-    //         |argv| argv.as_str(),
-    //     ),
-    // )
+    // test_parser(env::args().collect::<Vec<String>>().get(1).map_or(
+    //     // "! defined (_FILE_OFFSET_BITS) || _FILE_OFFSET_BITS != 64",
+    //     "defined (MACRO) || 14",
+    //     |argv| argv.as_str(),
+    // ));
+    // Ok(())
 }
 
 #[allow(unused)]
@@ -57,23 +60,17 @@ fn run_main(path: &str) -> io::Result<()> {
 }
 
 #[allow(unused)]
+#[allow(clippy::dbg_macro)]
 fn test_parser(expression: &str) {
     let input = String::from(expression);
-    // dbg!(&input);
+    dbg!(&input);
     let tokens = parser::parse_preprocessor(&input);
-    // dbg!(&tokens);
-    let tast = ternary::vec2ternary_ast(tokens);
+    dbg!(&tokens);
+    // let tast = ternary::vec2ternary_ast(tokens);
     // dbg!(&expression);
     // dbg!(&tast);
-    let res = ternary::eval_all(&tast, &mut structs::State::default());
+    // let res = ternary::eval_all(&tast, &mut structs::State::default());
     // dbg!(&res);
-    //     let ast = tokens_to_ast(&mut tokens.clone(), &mut FilePosition::default());
-    //     dbg!(&ast);
-    //     let result = eval(&ast, &mut State::default());
-    //     dbg!(&result);
-    //     dbg!(&expression);
-    //     // println!("{input:?}\n");
-    //     // println!("{tokens:?}\n");
-    //     // println!("{ast:?}\n");
-    //     // println!("{result:?}\n");
+    let res = reader::eval_tokens(&tokens, &mut structs::State::default());
+    dbg!(&res);
 }
