@@ -80,6 +80,7 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
         PathBuf::from("/usr/include/"),
         PathBuf::from("/usr/local/include/"),
         PathBuf::from("/usr/include/x86_64-linux-gnu/"),
+        PathBuf::from("/usr/lib/llvm-14/lib/clang/14.0.0/include/"),
     ];
     for place in places {
         let filepath = place.join(Path::new(&filename));
@@ -95,6 +96,14 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
 }
 
 fn preprocess_include(filename: &String, state: &mut State) -> String {
+    if state
+        .include_stack
+        .iter()
+        .any(|file| file.filename == *filename)
+    {
+        return String::new();
+    }
+    println!("INCLUDING FILE = {}", &filename);
     let mut content = String::new();
     let old_position = state.current_position.clone();
     look_for_file(filename, state)
@@ -181,12 +190,12 @@ fn convert_define_from_store(values: &&str) -> Directive {
 
 #[rustfmt::skip]
 fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directive {
-    match directive
+    let d =  directive
         .values
         .iter()
-        .map(|s: &String| s.as_str().trim())
-        .collect::<Vec<&str>>()
-        .as_slice()
+        .filter_map(|s: &String| {let trimmed = s.as_str().trim(); if trimmed.is_empty() {None} else {Some(trimmed)}})
+        .collect::<Vec<&str>>();
+    match d.as_slice()
     {
         ["define", values] => convert_define_from_store(values),
         ["undef", macro_name] => Directive::Undef {
@@ -208,7 +217,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
                 expression: res != 0,
             }
         }
-        ["endif"] => Directive::EndIf {},
+        ["endif"]  => Directive::EndIf {},
         ["else"] => Directive::Else,
         ["ifdef", macro_name] => Directive::IfDef {
             macro_name: String::from(*macro_name),
@@ -223,6 +232,9 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
                 filename: clamped_filename,
             }
         }
+        ["error"] => Directive::Error {
+            message: String::new(),
+        },
         ["error", message] => Directive::Error {
             message: String::from(*message),
         },
@@ -295,8 +307,9 @@ fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
             String::new()
         }
         Directive::Error { message } => {
-            // dbg!("{:?}\n", &state);
-            PreprocessorError::DirectiveError(message).fail_with_panic(&state.current_position);
+            // PreprocessorError::DirectiveError(message).fail_with_panic(&state.current_position);
+            PreprocessorError::DirectiveError(message).fail_with_warning(&state.current_position);
+            String::new()
         }
         Directive::Warning { message } => {
             PreprocessorError::DirectiveWarning(message).fail_with_warning(&state.current_position);
@@ -580,6 +593,7 @@ fn add_default_macro(state: &mut State) {
         ("_POSIX_C_SOURCE", "200809L"),
         ("_POSIX_C_SOURCE", "200809L"),
         ("_POSIX_C_SOURCE", "200809L"),
+        ("__x86_64__", "1"),
     ];
     for (name, value) in macros {
         state.defines.insert(

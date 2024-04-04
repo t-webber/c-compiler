@@ -1,14 +1,35 @@
 use crate::{
+    errors::PreprocessorError,
     parser::{Bracing, PreprocessorToken},
-    structs::State,
+    structs::{MacroValue, State},
     ternary::{eval_all, vec2ternary_ast},
 };
 
 pub fn eval_tokens(tokens: &Vec<PreprocessorToken>, state: &mut State) -> i32 {
     let mut inindex = 0;
-    match eval_between_parenthesis(&tokens, &mut inindex, state) {
+    match eval_between_parenthesis(tokens, &mut inindex, state) {
         PreprocessorToken::LiteralNumber(num) => num,
-        _ => panic!("Expected a number."),
+        PreprocessorToken::LiteralString(s) => i32::from(!s.is_empty()),
+        PreprocessorToken::Macro(macro_name) => {
+            state
+                .defines
+                .get(&macro_name)
+                .map_or(0, |macro_value| match macro_value {
+                    MacroValue::String(value) => value
+                        .parse::<i32>()
+                        .unwrap_or_else(|_| i32::try_from(value.len()).unwrap_or(0)),
+                    MacroValue::Function { .. } => {
+                        PreprocessorError::InvalidLeaf("functions are not yet implemented")
+                            .fail_with_panic(&state.current_position)
+                    }
+                })
+        }
+        tok @ (PreprocessorToken::NonOpSymbol(_)
+        | PreprocessorToken::Bracing(_)
+        | PreprocessorToken::Operator(_)) => {
+            PreprocessorError::InvalidLeaf(&format!("expected number, but got {tok:?}"))
+                .fail_with_panic(&state.current_position)
+        }
     }
 }
 

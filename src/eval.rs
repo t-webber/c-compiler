@@ -491,7 +491,7 @@ pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut State) -> i32 {
                 // let macro_value = state.defines.get(macro_name).unwrap_or_else(|| panic!("{}", &compilation_error(&state.current_position, PreprocessorError::MacroNameNotFound("Manifestement on doit implémenter la ligne du dessus car les gens sont cons :)"))));
                 match macro_value {
                     MacroValue::String(macro_string) => binary_ast_to_int(&tokens_to_ast(&parse_preprocessor(macro_string), &mut state.current_position), state),
-                    MacroValue::Function { .. } => todo!(),
+                    MacroValue::Function { .. } => {PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_warning(&state.current_position); 0},
                 }
             },
             #[allow(clippy::cast_possible_truncation)]
