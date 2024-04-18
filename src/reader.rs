@@ -54,6 +54,7 @@ fn eval_between_parenthesis(
         1 => return outtokens.get(0).unwrap().clone(),
         _ => {
             let tern = vec2ternary_ast(outtokens);
+            // dbg!(&tern);
             PreprocessorToken::LiteralNumber(eval_all(&tern, state))
         }
     }

@@ -38,7 +38,7 @@ fn main() -> Result<(), io::Error> {
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
     // test_parser(env::args().collect::<Vec<String>>().get(1).map_or(
     //     // "! defined (_FILE_OFFSET_BITS) || _FILE_OFFSET_BITS != 64",
-    //     "defined (MACRO) || 14",
+    //     "# define __REDIRECT(name, proto, alias) name proto __asm__ (__ASMNAME (#alias)) \n\n (!defined __LDBL_COMPAT && __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI == 0) || !defined __REDIRECT",
     //     |argv| argv.as_str(),
     // ));
     // Ok(())
@@ -47,7 +47,7 @@ fn main() -> Result<(), io::Error> {
 #[allow(unused)]
 fn run_main(path: &str) -> io::Result<()> {
     let preprocessed_file = preprocessor::preprocess_unit(PathBuf::from(path));
-    eprintln!("{preprocessed_file}");
+    // eprintln!("{preprocessed_file}");
     let mut data: &mut [u8] = &mut [0; 32];
     let mut file = File::create(format!(
         "{}i",
@@ -65,7 +65,7 @@ fn test_parser(expression: &str) {
     let input = String::from(expression);
     dbg!(&input);
     let tokens = parser::parse_preprocessor(&input);
-    dbg!(&tokens);
+    // dbg!(&tokens);
     // let tast = ternary::vec2ternary_ast(tokens);
     // dbg!(&expression);
     // dbg!(&tast);
