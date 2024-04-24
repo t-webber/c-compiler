@@ -1,6 +1,6 @@
 use crate::eval;
 use crate::parser::{Bracing, NonOpSymbol, PreprocessorToken};
-use crate::structs::State;
+use crate::structs::ParsingState;
 
 extern crate alloc;
 
@@ -36,8 +36,15 @@ impl ToLeaf for FullAstElt {
                 }
             }
             (true, false) => {
-                if self.elts[0] == PreprocessorToken::Bracing(Bracing::LeftParenthesis) {
-                    FullAst::Leaf(self.elts[1..self.elts.len()].to_vec())
+                if self.elts.first().is_some_and(|inner| {
+                    *inner == PreprocessorToken::Bracing(Bracing::LeftParenthesis)
+                }) {
+                    FullAst::Leaf(
+                        self.elts
+                            .get(1..self.elts.len())
+                            .unwrap_or_default()
+                            .to_vec(),
+                    )
                 } else {
                     // eprintln!("Bool set but parenthesis not found 2");
                     FullAst::Leaf(self.elts)
@@ -75,7 +82,7 @@ impl FullAstElt {
 impl TryFrom<Vec<PreprocessorToken>> for FullAstElt {
     fn try_from(iter: Vec<PreprocessorToken>) -> Result<Self, Self::Error> {
         let open = Some(*iter.first().unwrap() == PreprocessorToken::Bracing(Bracing::LeftParenthesis));
-        let close = iter.get(iter.len() - 1).is_some_and(|inner| inner == &PreprocessorToken::Bracing(Bracing::LeftParenthesis));
+        let close = iter.last().is_some_and(|inner| inner == &PreprocessorToken::Bracing(Bracing::LeftParenthesis));
         Ok(Self {
             elts: iter,
             open,
@@ -170,7 +177,7 @@ pub fn vec2ternary_ast(vec: Vec<PreprocessorToken>) -> FullAst {
 }
 
 #[rustfmt::skip]
-pub fn eval_all(no_ternaries_ast: &FullAst, state: &mut State) -> i32 {
+pub fn eval_all(no_ternaries_ast: &FullAst, state: &mut ParsingState) -> i32 {
     let empty: Box<FullAst> = Box::new(FullAst::Empty);
     match &no_ternaries_ast {
         FullAst::Empty => 0_i32,

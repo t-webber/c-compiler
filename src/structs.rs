@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::errors::FilePosition;
 
-/// Preprocessor Directive Parsing State
+/// Preprocessor Directive Parsing ParsingState
 ///
 #[derive(Eq, PartialEq, Default, Debug)]
 pub enum Pips {
@@ -59,7 +59,7 @@ pub enum Directive {
 }
 
 #[derive(Default, Debug)]
-pub struct State {
+pub struct ParsingState {
     pub comment_level: u32,
     pub inline_comment: bool,
     pub directive_parsing: Pips,
@@ -71,7 +71,7 @@ pub struct State {
     pub current_position: FilePosition,
 }
 
-impl State {
+impl ParsingState {
     pub fn new_file(&mut self, filename: String, filepath: String) {
         self.include_stack.push(self.current_position.clone());
 

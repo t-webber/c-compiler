@@ -52,7 +52,8 @@ fn main() -> Result<(), io::Error> {
 #[allow(unused)]
 fn run_main(path: &str) -> io::Result<()> {
     if !SUPPORTED_OS.contains(&OS) {
-        SystemError::UnsupportedOS(OS).fail_with_panic(&structs::State::default().current_position);
+        SystemError::UnsupportedOS(OS)
+            .fail_with_panic(&structs::ParsingState::default().current_position);
     }
     let preprocessed_file = preprocessor::preprocess_unit(PathBuf::from(path));
     // eprintln!("{preprocessed_file}");
@@ -77,8 +78,8 @@ fn test_parser(expression: &str) {
     // let tast = ternary::vec2ternary_ast(tokens);
     // dbg!(&expression);
     // dbg!(&tast);
-    // let res = ternary::eval_all(&tast, &mut structs::State::default());
+    // let res = ternary::eval_all(&tast, &mut structs::ParsingState::default());
     // dbg!(&res);
-    let res = reader::eval_tokens(&tokens, &mut structs::State::default());
+    let res = reader::eval_tokens(&tokens, &mut structs::ParsingState::default());
     dbg!(&res);
 }

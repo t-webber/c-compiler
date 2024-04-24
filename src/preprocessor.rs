@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use crate::errors::{FailError, GeneralError, PreprocessorError, SystemError};
 use crate::parser::parse_preprocessor;
 use crate::reader::eval_tokens;
-use crate::structs::{Directive, MacroValue, Pips, State, StoreDirective};
+use crate::structs::{Directive, MacroValue, ParsingState, Pips, StoreDirective};
 
 #[rustfmt::skip]
-pub fn deal_with_c(ch: char, state: &mut State, current_directive: &mut StoreDirective) -> String {
+pub fn deal_with_c(ch: char, state: &mut ParsingState, current_directive: &mut StoreDirective) -> String {
     let mut tmp_dir_state = None;
     let res = 
     match &mut state.directive_parsing {
@@ -31,7 +31,7 @@ pub fn deal_with_c(ch: char, state: &mut State, current_directive: &mut StoreDir
 }
 
 #[rustfmt::skip]
-pub fn preprocess_character(ch: char, state: &mut State, previous_char: &mut char, current_directive: &mut StoreDirective) -> String {
+pub fn preprocess_character(ch: char, state: &mut ParsingState, previous_char: &mut char, current_directive: &mut StoreDirective) -> String {
     let in_comment = state.comment_level>0 || state.inline_comment;
     // Match double chars tokens
     let prev = *previous_char;
@@ -47,7 +47,7 @@ pub fn preprocess_character(ch: char, state: &mut State, previous_char: &mut cha
         _ if in_comment => { String::new() },
         '#' => match state.directive_parsing {
                 Pips::None => { state.directive_parsing = Pips::DirectiveName(String::new()); String::new() },
-                _ => {deal_with_c(ch, state, current_directive)}
+                Pips::DirectiveName(_) | Pips::DirectiveArgs(_) | Pips::DirectiveValue(_) => {deal_with_c(ch, state, current_directive)}
             },
         _ => { deal_with_c(ch, state, current_directive) }
     };
@@ -59,7 +59,7 @@ pub fn preprocess_character(ch: char, state: &mut State, previous_char: &mut cha
 }
 
 #[rustfmt::skip]
-fn preprocess_define(directive: &Directive, state: &mut State) -> String {
+fn preprocess_define(directive: &Directive, state: &mut ParsingState) -> String {
     if let Directive::Define { macro_name, macro_args, macro_value } = directive {
         if macro_args.is_empty() {
             state.defines.insert(macro_name.clone(), MacroValue::String(macro_value.clone()));
@@ -72,7 +72,7 @@ fn preprocess_define(directive: &Directive, state: &mut State) -> String {
     }
 }
 
-fn look_for_file(filename: &String, state: &mut State) -> File {
+fn look_for_file(filename: &String, state: &mut ParsingState) -> File {
     let mut places: Vec<PathBuf> = if OS == "linux" {
         vec![
             "/usr/include/",
@@ -109,7 +109,7 @@ fn look_for_file(filename: &String, state: &mut State) -> File {
     PreprocessorError::FileNotFound(filename).fail_with_panic(&state.current_position);
 }
 
-fn preprocess_include(filename: &String, state: &mut State) -> String {
+fn preprocess_include(filename: &String, state: &mut ParsingState) -> String {
     if state
         .include_stack
         .iter()
@@ -117,7 +117,6 @@ fn preprocess_include(filename: &String, state: &mut State) -> String {
     {
         return String::new();
     }
-    println!("INCLUDING FILE = {}", &filename);
     let mut content = String::new();
     let old_position = state.current_position.clone();
     look_for_file(filename, state)
@@ -137,22 +136,22 @@ enum DirectiveParsingState {
 }
 
 #[rustfmt::skip]
-fn convert_define_from_store(values: &&str) -> Directive {
-    let mut state = DirectiveParsingState::Name;
+fn convert_define_from_store(values: &&str, parsing_state: &mut ParsingState) -> Directive {
+    let mut directive_state = DirectiveParsingState::Name;
     let mut brace_level: usize = 0;
     let mut macro_name = String::new();
     let mut args: Vec<String> = vec![];
     let mut value = String::new();
     values.chars().for_each(|ch| match ch {
-        _ if state == DirectiveParsingState::Value => value.push(ch),
-        '(' if state == DirectiveParsingState::Name || state == DirectiveParsingState::AfterName => {
+        _ if directive_state == DirectiveParsingState::Value => value.push(ch),
+        '(' if directive_state == DirectiveParsingState::Name || directive_state == DirectiveParsingState::AfterName => {
                     brace_level += 1;
-                    state = DirectiveParsingState::Args;
+                    directive_state = DirectiveParsingState::Args;
                     args.push(String::new());
                     value.push(ch);
                 }
         '(' if brace_level > 0 => {
-            state = DirectiveParsingState::Value;
+            directive_state = DirectiveParsingState::Value;
             args.clear();
             value.push(ch);
         }
@@ -160,26 +159,26 @@ fn convert_define_from_store(values: &&str) -> Directive {
             brace_level += 1;
             value.push(ch);
         }
-        ' ' if state == DirectiveParsingState::Name => state = DirectiveParsingState::AfterName,
+        ' ' if directive_state == DirectiveParsingState::Name => directive_state = DirectiveParsingState::AfterName,
         ' ' => {}
-        ')' if state == DirectiveParsingState::Name => {
-            panic!("Unexpected ')' in macro name")
+        ')' if directive_state == DirectiveParsingState::Name => {
+            PreprocessorError::InvalidMacroName("Unexpected ')' in macro name").fail_with_panic(&parsing_state.current_position)
         }
         ')' if brace_level > 1 => {
             brace_level -= 1;
             value.push(ch);
             args.last_mut().unwrap().push(ch);
         }
-        ')' if state == DirectiveParsingState::Args => {
+        ')' if directive_state == DirectiveParsingState::Args => {
             brace_level = brace_level.checked_sub(1).expect("Unmatched (");
-            state = DirectiveParsingState::Value;
+            directive_state = DirectiveParsingState::Value;
             value.clear();
         }
         ')' => value.push(ch),
         ',' => args.push(String::new()),
-        _ if state == DirectiveParsingState::Name => macro_name.push(ch),
-        _ if state == DirectiveParsingState::AfterName => {
-            state = DirectiveParsingState::Value;
+        _ if directive_state == DirectiveParsingState::Name => macro_name.push(ch),
+        _ if directive_state == DirectiveParsingState::AfterName => {
+            directive_state = DirectiveParsingState::Value;
             value.push(ch);
         }
         _ => {
@@ -203,7 +202,7 @@ fn convert_define_from_store(values: &&str) -> Directive {
 }
 
 #[rustfmt::skip]
-fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directive {
+fn convert_from_store(directive: &StoreDirective, state: &mut ParsingState) -> Directive {
     let d =  directive
         .values
         .iter()
@@ -211,7 +210,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
         .collect::<Vec<&str>>();
     match d.as_slice()
     {
-        ["define", values] => convert_define_from_store(values),
+        ["define", values] => convert_define_from_store(values, state),
         ["undef", macro_name] => Directive::Undef {
             macro_name: String::from(*macro_name),
         },
@@ -263,7 +262,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut State) -> Directiv
 }
 
 #[rustfmt::skip]
-fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
+fn preprocess_directive(directive: &Directive, state: &mut ParsingState) -> String {
     // println!("Directive: {directive:?}");
     if state.if_level > 0 {
         match directive {
@@ -339,7 +338,7 @@ fn preprocess_directive(directive: &Directive, state: &mut State) -> String {
 }
 
 #[rustfmt::skip]
-pub fn preprocess(content: &str, state: &mut State) -> String {
+pub fn preprocess(content: &str, state: &mut ParsingState) -> String {
     let mut lines: Vec<(u32, String)> = vec![];
     let mut previous_line_escaped = false;
     let mut line_number: u32 = 1;
@@ -410,7 +409,8 @@ pub fn preprocess(content: &str, state: &mut State) -> String {
     processed_file
 }
 
-fn add_default_macro(state: &mut State) {
+#[allow(clippy::too_many_lines)]
+fn add_default_macro(state: &mut ParsingState) {
     let macros = &[
         //
         // Standard Predefined Macros
@@ -623,7 +623,7 @@ pub fn preprocess_unit(filepath: PathBuf) -> String {
         .expect("Failed to read the file")
         .read_to_string(&mut content)
         .expect("Failed to convert the file");
-    let mut state = State {
+    let mut state = ParsingState {
         if_writing: true,
         ..Default::default()
     };

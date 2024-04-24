@@ -72,7 +72,7 @@ pub enum PreprocessorError<'msg> {
     FileNotFound(&'msg str),
     FileNotReadable(&'msg str),
     //
-    InvalidMaxcroName(&'msg str),
+    InvalidMacroName(&'msg str),
     MacroArgsNotClosed,
     MacroNotDefined(&'msg str),
     //
@@ -106,7 +106,7 @@ impl<'msg> GetCode<'msg> for PreprocessorError<'msg> {
             PreprocessorError::FileNotFound(filename) => (12, format!("file {filename} not found")),
             PreprocessorError::FileNotReadable(filename) => (13, format!("file {filename} not readable")),
             //
-            PreprocessorError::InvalidMaxcroName(name) => (21, format!("invalid macro name {name}")),
+            PreprocessorError::InvalidMacroName(name) => (21, format!("invalid macro name {name}")),
             PreprocessorError::MacroArgsNotClosed => (22, String::from("macro arguments not closed")),
             PreprocessorError::MacroNotDefined(name) => (23, format!("macro {name} not defined")),
             //

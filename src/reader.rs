@@ -1,15 +1,15 @@
 use crate::{
     errors::{FailError, PreprocessorError},
     parser::{Bracing, PreprocessorToken},
-    structs::{MacroValue, State},
+    structs::{MacroValue, ParsingState},
     ternary::{eval_all, vec2ternary_ast},
 };
 
-pub fn eval_tokens(tokens: &Vec<PreprocessorToken>, state: &mut State) -> i32 {
+pub fn eval_tokens(tokens: &Vec<PreprocessorToken>, state: &mut ParsingState) -> i32 {
     let mut inindex = 0;
     match eval_between_parenthesis(tokens, &mut inindex, state) {
         PreprocessorToken::LiteralNumber(num) => num,
-        PreprocessorToken::LiteralString(s) => i32::from(!s.is_empty()),
+        PreprocessorToken::LiteralString(val) => i32::from(!val.is_empty()),
         PreprocessorToken::Macro(macro_name) => {
             state
                 .defines
@@ -17,7 +17,7 @@ pub fn eval_tokens(tokens: &Vec<PreprocessorToken>, state: &mut State) -> i32 {
                 .map_or(0, |macro_value| match macro_value {
                     MacroValue::String(value) => value
                         .parse::<i32>()
-                        .unwrap_or_else(|_| i32::try_from(value.len()).unwrap_or(0)),
+                        .unwrap_or_else(|_| i32::try_from(value.len()).unwrap_or_default()),
                     MacroValue::Function { .. } => {
                         PreprocessorError::InvalidLeaf("functions are not yet implemented")
                             .fail_with_panic(&state.current_position)
@@ -36,7 +36,7 @@ pub fn eval_tokens(tokens: &Vec<PreprocessorToken>, state: &mut State) -> i32 {
 fn eval_between_parenthesis(
     intokens: &Vec<PreprocessorToken>,
     inindex: &mut usize,
-    state: &mut State,
+    state: &mut ParsingState,
 ) -> PreprocessorToken {
     let mut outtokens = Vec::<PreprocessorToken>::new();
     while let Some(token) = intokens.get(*inindex).as_ref() {
