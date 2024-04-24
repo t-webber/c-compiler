@@ -13,34 +13,35 @@ trait GetCode<'msg> {
 
 #[allow(unused)]
 pub enum SystemError<'msg> {
-    UnsupportedOS(&'msg str),
+    UnsupportedOS,
+    CompilationError(&'msg str),
+    AccessLocalDenied,
+    AccessLibraryDenied(&'msg str),
 }
 
+#[rustfmt::skip]
 impl<'msg> GetCode<'msg> for SystemError<'msg> {
     const INCREMENT: u32 = 0;
     fn get_code(&self) -> (u32, String) {
         match self {
-            SystemError::UnsupportedOS(msg) => (
-                9,
-                String::from(&format!("operating system '{msg}' isn't supported")),
-            ),
+            Self::UnsupportedOS =>  (1, String::from("operating system '{msg}' isn't supported")),
+            Self::CompilationError(message) => (2, String::from(&format!("compilation error: {message}"))),
+            Self::AccessLocalDenied => (8, String::from("path to the source code is denied")),
+            Self::AccessLibraryDenied(msg) => (9, format!("path to the library {msg} is denied")),
         }
     }
 }
 
 #[allow(unused)]
 pub enum GeneralError<'msg> {
-    UnclosedComment {
-        file_position: &'msg FilePosition,
-        level: u32,
-    },
+    UnclosedComment { file_position: &'msg FilePosition, level: u32 },
     UnclosedString,
     UnclosedChar,
     UnclosedParenthesis,
     UnclosedBracket,
     UnclosedBrace,
     MainNotFound,
-    AccessLocalDenied,
+    Overflow,
 }
 
 #[rustfmt::skip]
@@ -48,15 +49,15 @@ impl<'msg> GetCode<'msg> for GeneralError<'msg> {
     const INCREMENT: u32 = 100;
     fn get_code(&self) -> (u32, String) {
         match self {
-            GeneralError::UnclosedComment {file_position , level} => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
+            Self::UnclosedComment {file_position , level} => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
                                                                                                 file_position.filepath, file_position.line, file_position.col)),
-            GeneralError::UnclosedString => (2, String::from("unclosed string")),
-            GeneralError::UnclosedChar => (3, String::from("unclosed char")),
-            GeneralError::UnclosedParenthesis => (4, String::from("unclosed parenthesis")),
-            GeneralError::UnclosedBracket => (5, String::from("unclosed bracket")),
-            GeneralError::UnclosedBrace => (6, String::from("unclosed brace")),
-            GeneralError::MainNotFound => (7, String::from("main not found")),
-            GeneralError::AccessLocalDenied => (8, String::from("path to the source code is denied")),
+            Self::UnclosedString => (2, String::from("unclosed string")),
+            Self::UnclosedChar => (3, String::from("unclosed char")),
+            Self::UnclosedParenthesis => (4, String::from("unclosed parenthesis")),
+            Self::UnclosedBracket => (5, String::from("unclosed bracket")),
+            Self::UnclosedBrace => (6, String::from("unclosed brace")),
+            Self::MainNotFound => (7, String::from("main not found")),
+            Self::Overflow => (9, String::from("overflow on airthmetic operation")),
         }
     }
 }
@@ -67,6 +68,7 @@ pub enum PreprocessorError<'msg> {
     //
     DirectiveNameMissing,
     InvalidSharpPosition,
+    DefinedSynthax,
     //
     InvalidFileName(&'msg str),
     FileNotFound(&'msg str),
@@ -82,6 +84,8 @@ pub enum PreprocessorError<'msg> {
     DefinedChildNotMacro,
     InvalidLeaf(&'msg str),
     StringsNotAllowed,
+    BinarySynthaxOnUnary(&'msg str),
+    EmptyParenthesis,
     //
     ElifWithoutIf,
     ElseWithoutIf,
@@ -97,33 +101,36 @@ impl<'msg> GetCode<'msg> for PreprocessorError<'msg> {
     const INCREMENT: u32 = 200;
     fn get_code(&'msg self) -> (u32, String) {
         match self {
-            PreprocessorError::Internal(message) => (99, format!("internal error: {message}.\nPlease raise an issue") ),
+            Self::Internal(message) => (99, format!("internal error: {message}.\nPlease raise an issue") ),
 
-            PreprocessorError::DirectiveNameMissing => (1, String::from("directive name missing")),
-            PreprocessorError::InvalidSharpPosition => (2, String::from("invalid sharp position")),
+            Self::DirectiveNameMissing => (1, String::from("directive name missing")),
+            Self::InvalidSharpPosition => (2, String::from("invalid sharp position")),
+            Self::DefinedSynthax => (3, String::from("expected to find a macro between \" or <> in defined directive")),
             //
-            PreprocessorError::InvalidFileName(filename) => (11, format!("invalid filename {filename}")),
-            PreprocessorError::FileNotFound(filename) => (12, format!("file {filename} not found")),
-            PreprocessorError::FileNotReadable(filename) => (13, format!("file {filename} not readable")),
+            Self::InvalidFileName(filename) => (11, format!("invalid filename {filename}")),
+            Self::FileNotFound(filename) => (12, format!("file {filename} not found")),
+            Self::FileNotReadable(filename) => (13, format!("file {filename} not readable")),
             //
-            PreprocessorError::InvalidMacroName(name) => (21, format!("invalid macro name {name}")),
-            PreprocessorError::MacroArgsNotClosed => (22, String::from("macro arguments not closed")),
-            PreprocessorError::MacroNotDefined(name) => (23, format!("macro {name} not defined")),
+            Self::InvalidMacroName(name) => (21, format!("invalid macro name {name}")),
+            Self::MacroArgsNotClosed => (22, String::from("macro arguments not closed")),
+            Self::MacroNotDefined(name) => (23, format!("macro {name} not defined")),
             //
-            PreprocessorError::IncompleteOperator(operator) => (31,format!("incomplete operator {operator}: missing argument")),
-            PreprocessorError::InvalidOperator(operator) => (31,format!("invalid operator {operator}: not supported in preprocessor")),
-            PreprocessorError::DefinedChildNotLeaf => (32, String::from("child of \"defined\" should be a leaf")),
-            PreprocessorError::DefinedChildNotMacro => (33, String::from("a macro was expected after defined")),
-            PreprocessorError::InvalidLeaf(leaf) => (34, format!("invalid leaf {leaf}")),
-            PreprocessorError::StringsNotAllowed => (35, String::from("strings not allowed in preprocessor")),
+            Self::IncompleteOperator(operator) => (31,format!("incomplete operator {operator}: missing argument")),
+            Self::InvalidOperator(operator) => (31,format!("invalid operator {operator}: not supported in preprocessor")),
+            Self::DefinedChildNotLeaf => (32, String::from("child of \"defined\" should be a leaf")),
+            Self::DefinedChildNotMacro => (33, String::from("a macro was expected after defined")),
+            Self::InvalidLeaf(leaf) => (34, format!("invalid leaf {leaf}")),
+            Self::StringsNotAllowed => (35, String::from("strings not allowed in preprocessor")),
+            Self::BinarySynthaxOnUnary(operator) => (36, format!("found the unary operator {operator}, following a binary operator synthax")),
+            Self::EmptyParenthesis => (37, String::from("empty parenthesis")),
             //
-            PreprocessorError::ElifWithoutIf => (41, String::from("elif found without an if")),
-            PreprocessorError::ElseWithoutIf => (42, String::from("else found without an if")),
-            PreprocessorError::EndifWithoutIf => (43, String::from("endif found without an if")),
+            Self::ElifWithoutIf => (41, String::from("elif found without an if")),
+            Self::ElseWithoutIf => (42, String::from("else found without an if")),
+            Self::EndifWithoutIf => (43, String::from("endif found without an if")),
             //
-            PreprocessorError::DirectiveError(message) => (51, format!("#error raised {message}")),
-            PreprocessorError::DirectiveWarning(message) => (52, format!("#warning raised {message}")),
-            PreprocessorError::DirectiveUnknown(message) => (53, format!("directive {message} unknown by compiler")),
+            Self::DirectiveError(message) => (51, format!("#error raised {message}")),
+            Self::DirectiveWarning(message) => (52, format!("#warning raised {message}")),
+            Self::DirectiveUnknown(message) => (53, format!("directive {message} unknown by compiler")),
         }
     }
 }

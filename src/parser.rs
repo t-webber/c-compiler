@@ -82,8 +82,8 @@ pub enum BinaryOperator {
 #[allow(unused)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Operator {
-    UnaryOperator(UnaryOperator),
-    BinaryOperator(BinaryOperator),
+    Unary(UnaryOperator),
+    Binary(BinaryOperator),
     Conditional,
 }
 
@@ -178,15 +178,15 @@ impl OperatorTrait for BinaryOperator {
 impl OperatorTrait for Operator {
     fn precedence(&self) -> u32 {
         match self {
-            Self::UnaryOperator(op) => op.precedence(),
-            Self::BinaryOperator(op) => op.precedence(),
+            Self::Unary(op) => op.precedence(),
+            Self::Binary(op) => op.precedence(),
             Self::Conditional => 13,
         }
     }
     fn associativity(&self) -> Associativity {
         match self {
-            Self::UnaryOperator(op) => op.associativity(),
-            Self::BinaryOperator(op) => op.associativity(),
+            Self::Unary(op) => op.associativity(),
+            Self::Binary(op) => op.associativity(),
             Self::Conditional => Associativity::RightToLeft,
         }
     }
@@ -238,10 +238,11 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
         return None;
     }
     let no_operator = token_str.chars().all(is_not_operator);
-
+    
     let token = if let Ok(number) = token_str.parse::<f32>() {
         if no_operator {
-            PreprocessorToken::LiteralNumber(number.floor() as i32)
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+            PreprocessorToken::LiteralNumber(number as i32)
         } else {
             return None;
         }
@@ -249,45 +250,45 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
         match token_str {
             "?" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Interrogation),
             ":" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon),
-            "*" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::Mul)),
-            "/" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::Div)),
-            "%" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::Mod)),
-            "&" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::BitwiseAnd)),
-            "|" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::BitwiseOr)),
-            "^" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::BitwiseXor)),
-            "<" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::LessThan)),
-            ">" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::GreaterThan)),
-            ">>" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::ShiftRight)),
-            "<<" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::ShiftLeft)),
-            "!=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::NotEqual)),
-            "==" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::Eequal)),
-            "+=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::AddAssign)),
-            "-=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::SubAssign)),
-            "*=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::MulAssign)),
-            "/=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::DivAssign)),
-            "%=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::ModAssign)),
-            "<=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::LessEqual)),
-            ">=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::GreaterEqual)),
-            "&=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::AndAssign)),
-            "|=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::OrAssign)),
-            "^=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::XorAssign)),
-            "&&" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::And)),
-            "||" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::Or)),
-            ">>=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::ShiftRightAssign)),
-            "<<=" => PreprocessorToken::Operator(Operator::BinaryOperator(BinaryOperator::ShiftLeftAssign)),
+            "*" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Mul)),
+            "/" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Div)),
+            "%" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Mod)),
+            "&" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::BitwiseAnd)),
+            "|" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::BitwiseOr)),
+            "^" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::BitwiseXor)),
+            "<" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::LessThan)),
+            ">" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::GreaterThan)),
+            ">>" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftRight)),
+            "<<" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftLeft)),
+            "!=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::NotEqual)),
+            "==" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Eequal)),
+            "+=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::AddAssign)),
+            "-=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::SubAssign)),
+            "*=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::MulAssign)),
+            "/=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::DivAssign)),
+            "%=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ModAssign)),
+            "<=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::LessEqual)),
+            ">=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::GreaterEqual)),
+            "&=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::AndAssign)),
+            "|=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::OrAssign)),
+            "^=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::XorAssign)),
+            "&&" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::And)),
+            "||" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Or)),
+            ">>=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftRightAssign)),
+            "<<=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftLeftAssign)),
             "(" => PreprocessorToken::Bracing(Bracing::LeftParenthesis),
             ")" => PreprocessorToken::Bracing(Bracing::RightParenthesis),
             "[" => PreprocessorToken::Bracing(Bracing::LeftBracket),
             "]" => PreprocessorToken::Bracing(Bracing::RightBracket),
             "{" => PreprocessorToken::Bracing(Bracing::LeftBrace),
             "}" => PreprocessorToken::Bracing(Bracing::RightBrace),
-            "!" => PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::Not)),
-            "+" =>  PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::Plus)),
-            "-" => PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::Minus)),
-            "++" => PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::Increment)),
-            "--" => PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::Decrement)),
-            "~" => PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::BitwiseNot)),
-            "defined" => PreprocessorToken::Operator(Operator::UnaryOperator(UnaryOperator::Defined)),
+            "!" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Not)),
+            "+" =>  PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Plus)),
+            "-" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Minus)),
+            "++" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Increment)),
+            "--" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Decrement)),
+            "~" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::BitwiseNot)),
+            "defined" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Defined)),
             _ => {
                 if (token_str.starts_with('\"')
                     && token_str

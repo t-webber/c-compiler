@@ -1,8 +1,10 @@
+use std::alloc::System;
 use std::env::consts::OS;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use crate::arithmetic::CheckedOperations;
 use crate::errors::{FailError, GeneralError, PreprocessorError, SystemError};
 use crate::parser::parse_preprocessor;
 use crate::reader::eval_tokens;
@@ -42,7 +44,7 @@ pub fn preprocess_character(ch: char, state: &mut ParsingState, previous_char: &
         '/' if prev =='/' => {state.inline_comment=true;*previous_char=' ';String::new()} ,
         '*' if prev =='/' => {state.comment_level+=1;state.comment_unclosed_positon.push(state.current_position.clone());*previous_char=' ';String::new()},
         _ if (prev=='/' || prev=='*') && in_comment => {  String::new() },
-        _ if prev=='/' || prev=='*' => { deal_with_c(prev, state, current_directive)+deal_with_c(ch, state, current_directive).as_str() },
+        _ if prev=='/' || prev=='*' => { deal_with_c(prev, state, current_directive) + deal_with_c(ch, state, current_directive).as_str() },
         '/'|'*' => { String::new() }
         _ if in_comment => { String::new() },
         '#' => match state.directive_parsing {
@@ -87,41 +89,41 @@ fn look_for_file(filename: &String, state: &mut ParsingState) -> File {
             "D:\\Windows\\Apps\\Visual\\Studio\\IDE\\VC\\Tools\\MSVC\\14.39.33519\\include\\",
         ]
     } else {
-        SystemError::UnsupportedOS(OS).fail_with_panic(&state.current_position);
+        SystemError::UnsupportedOS.fail_with_panic(&state.current_position);
     }
     .iter()
     .map(|path: &&str| PathBuf::from(path))
     .collect();
     match PathBuf::from(&state.current_position.filepath).parent() {
         Some(path) => places.push(path.to_owned()),
-        None => GeneralError::AccessLocalDenied.fail_with_warning(&state.current_position),
+        None => SystemError::AccessLocalDenied.fail_with_warning(&state.current_position),
     };
     for place in places {
         let filepath = place.join(Path::new(&filename));
         if filepath.exists() {
             state.new_file(
                 filename.clone(),
-                String::from(filepath.as_os_str().to_str().expect("Invalid path")),
+                String::from(filepath.to_str().unwrap_or_else(|| {
+                    PreprocessorError::InvalidFileName(filepath.to_str().unwrap_or_default()).fail_with_panic(&state.current_position)
+                })),
             );
-            return File::open(filepath).expect("Failed to open file from local directory");
+            return File::open(&filepath).unwrap_or_else(|_| {
+                SystemError::AccessLibraryDenied(filepath.to_str().unwrap_or_default()).fail_with_panic(&state.current_position)
+            });
         }
     }
     PreprocessorError::FileNotFound(filename).fail_with_panic(&state.current_position);
 }
 
 fn preprocess_include(filename: &String, state: &mut ParsingState) -> String {
-    if state
-        .include_stack
-        .iter()
-        .any(|file| file.filename == *filename)
-    {
+    if state.include_stack.iter().any(|file| file.filename == *filename) {
         return String::new();
     }
     let mut content = String::new();
     let old_position = state.current_position.clone();
     look_for_file(filename, state)
         .read_to_string(&mut content)
-        .expect("Failed to convert file");
+        .unwrap_or_else(|_| SystemError::AccessLibraryDenied(filename).fail_with_panic(&state.current_position));
     let preprocessed_file = preprocess(&content, state);
     state.current_position = old_position;
     preprocessed_file
@@ -136,7 +138,7 @@ enum DirectiveParsingState {
 }
 
 #[rustfmt::skip]
-fn convert_define_from_store(values: &&str, parsing_state: &mut ParsingState) -> Directive {
+fn convert_define_from_store(values: &&str, parsing_state: &ParsingState) -> Directive {
     let mut directive_state = DirectiveParsingState::Name;
     let mut brace_level: usize = 0;
     let mut macro_name = String::new();
@@ -189,7 +191,7 @@ fn convert_define_from_store(values: &&str, parsing_state: &mut ParsingState) ->
     if value.is_empty() {
         value = format!(
             "({})",
-            args.iter().fold(String::new(), |acc, curr_string| acc + curr_string.as_str())
+            args.iter().fold(String::new(), |mut acc, curr_string| {acc.push_str(curr_string); acc})
         );
         args.clear();
     }
@@ -203,12 +205,12 @@ fn convert_define_from_store(values: &&str, parsing_state: &mut ParsingState) ->
 
 #[rustfmt::skip]
 fn convert_from_store(directive: &StoreDirective, state: &mut ParsingState) -> Directive {
-    let d =  directive
+    let parsed_directive =  directive
         .values
         .iter()
-        .filter_map(|s: &String| {let trimmed = s.as_str().trim(); if trimmed.is_empty() {None} else {Some(trimmed)}})
+        .filter_map(|inner: &String| {let trimmed = inner.as_str().trim(); if trimmed.is_empty() {None} else {Some(trimmed)}})
         .collect::<Vec<&str>>();
-    match d.as_slice()
+    match parsed_directive.as_slice()
     {
         ["define", values] => convert_define_from_store(values, state),
         ["undef", macro_name] => Directive::Undef {
@@ -240,7 +242,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut ParsingState) -> D
         },
         ["include", filename] => {
             let trimed_filename = filename.trim();
-            let clamped_filename = String::from(&trimed_filename[1..trimed_filename.len() - 1]);
+            let clamped_filename = trimed_filename.get(1..trimed_filename.len().checked_sub_unwrap(1, &state.current_position)).unwrap_or_else(|| PreprocessorError::DefinedSynthax.fail_with_panic(&state.current_position)).to_owned();
             Directive::Include {
                 filename: clamped_filename,
             }
@@ -277,8 +279,10 @@ fn preprocess_directive(directive: &Directive, state: &mut ParsingState) -> Stri
                 state.if_level += 1;
                 return String::new();
             },
-            _ if state.if_writing => (),
-            _ => return String::new(),
+            Directive::None | Directive::Define{ .. } | Directive::IfDef{ .. } | Directive::IfnDef{ .. } | Directive::Include{ .. } | Directive::Undef{ .. } | Directive::Warning{ .. } | Directive::Pragma{ .. } | Directive::Error{ .. } 
+                if state.if_writing => (),
+            Directive::None | Directive::Define{ .. } | Directive::IfDef{ .. } | Directive::IfnDef{ .. } | Directive::Include{ .. } | Directive::Undef{ .. } | Directive::Warning{ .. } | Directive::Pragma{ .. } | Directive::Error{ .. } 
+                => return String::new(),
         }
     }
     match directive {
@@ -345,7 +349,7 @@ pub fn preprocess(content: &str, state: &mut ParsingState) -> String {
     for line in content.lines() {
         let escaped = line.ends_with('\\');
         let trimed_line = if escaped {
-            &line[0..line.len() - 1]
+            line.get(0..line.len() - 1).unwrap_or_else(|| SystemError::CompilationError("EOL not found, but line ends with \\").fail_with_panic(&state.current_position))
         } else {
             line
         };
@@ -610,10 +614,7 @@ fn add_default_macro(state: &mut ParsingState) {
         ("__x86_64__", "1"),
     ];
     for (name, value) in macros {
-        state.defines.insert(
-            String::from(*name),
-            MacroValue::String(String::from(*value)),
-        );
+        state.defines.insert(String::from(*name), MacroValue::String(String::from(*value)));
     }
 }
 
@@ -635,10 +636,7 @@ pub fn preprocess_unit(filepath: PathBuf) -> String {
             .to_owned()
             .into_string()
             .expect("Invalid filename"),
-        filepath
-            .into_os_string()
-            .into_string()
-            .expect("Invalid path"),
+        filepath.into_os_string().into_string().expect("Invalid path"),
     );
     preprocess(&content, &mut state)
 }

@@ -1,21 +1,13 @@
-#![warn(
-    clippy::all,
-    clippy::pedantic,
-    clippy::restriction,
-    clippy::nursery,
-    clippy::cargo
-)]
-// #![feature(stmt_expr_attributes)]
-#![allow(clippy::implicit_return, clippy::single_call_fn)]
+#![warn(clippy::all, clippy::pedantic, clippy::restriction, clippy::nursery, clippy::cargo)]
+#![allow(clippy::implicit_return)]
+#![allow(clippy::single_call_fn)]
 #![allow(clippy::pattern_type_mismatch)]
 #![allow(clippy::missing_docs_in_private_items)]
-#![allow(clippy::use_debug)]
-#![allow(clippy::print_stderr)]
 #![allow(clippy::question_mark_used)]
-#![allow(clippy::expect_used)]
 #![allow(clippy::separated_literal_suffix)]
 #![allow(clippy::blanket_clippy_restriction_lints)]
-#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::string_add)]
+#![feature(stmt_expr_attributes)]
 
 use std::env::consts::OS;
 use std::fs::File;
@@ -29,6 +21,7 @@ use std::env;
 
 use errors::{FailError, SystemError};
 
+mod arithmetic;
 mod errors;
 mod eval;
 mod parser;
@@ -49,13 +42,26 @@ fn main() -> Result<(), io::Error> {
     // Ok(())
 }
 
+enum A {
+    B,
+}
+
+impl A {
+    fn reogidfvksfpijorgefndkosfzrjn(self) -> Self {
+        self
+    }
+}
+
 #[allow(unused)]
 fn run_main(path: &str) -> io::Result<()> {
     if !SUPPORTED_OS.contains(&OS) {
-        SystemError::UnsupportedOS(OS)
-            .fail_with_panic(&structs::ParsingState::default().current_position);
+        SystemError::UnsupportedOS.fail_with_panic(&structs::ParsingState::default().current_position);
     }
     let preprocessed_file = preprocessor::preprocess_unit(PathBuf::from(path));
+    let x = A::B
+        .reogidfvksfpijorgefndkosfzrjn()
+        .reogidfvksfpijorgefndkosfzrjn()
+        .reogidfvksfpijorgefndkosfzrjn();
     // eprintln!("{preprocessed_file}");
     let mut data: &mut [u8] = &mut [0; 32];
     let mut file = File::create(format!(
