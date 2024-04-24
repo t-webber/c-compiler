@@ -26,8 +26,7 @@ impl ToLeaf for FullAstElt {
         match (self.open.unwrap_or(false), self.close) {
             (true, true) => {
                 if self.elts[0] == PreprocessorToken::Bracing(Bracing::LeftParenthesis)
-                    && self.elts[self.elts.len() - 1]
-                        == PreprocessorToken::Bracing(Bracing::RightParenthesis)
+                    && self.elts[self.elts.len() - 1] == PreprocessorToken::Bracing(Bracing::RightParenthesis)
                 {
                     FullAst::Leaf(self.elts[1..self.elts.len() - 1].to_vec())
                 } else {
@@ -36,24 +35,19 @@ impl ToLeaf for FullAstElt {
                 }
             }
             (true, false) => {
-                if self.elts.first().is_some_and(|inner| {
-                    *inner == PreprocessorToken::Bracing(Bracing::LeftParenthesis)
-                }) {
-                    FullAst::Leaf(
-                        self.elts
-                            .get(1..self.elts.len())
-                            .unwrap_or_default()
-                            .to_vec(),
-                    )
+                if self
+                    .elts
+                    .first()
+                    .is_some_and(|inner| *inner == PreprocessorToken::Bracing(Bracing::LeftParenthesis))
+                {
+                    FullAst::Leaf(self.elts.get(1..self.elts.len()).unwrap_or_default().to_vec())
                 } else {
                     // eprintln!("Bool set but parenthesis not found 2");
                     FullAst::Leaf(self.elts)
                 }
             }
             (false, true) => {
-                if self.elts[self.elts.len() - 1]
-                    == PreprocessorToken::Bracing(Bracing::RightParenthesis)
-                {
+                if self.elts[self.elts.len() - 1] == PreprocessorToken::Bracing(Bracing::RightParenthesis) {
                     FullAst::Leaf(self.elts[0..self.elts.len() - 1].to_vec())
                 } else {
                     // eprintln!("Bool set but parenthesis not found 3");
@@ -183,7 +177,7 @@ pub fn eval_all(no_ternaries_ast: &FullAst, state: &mut ParsingState) -> i32 {
         FullAst::Empty => 0_i32,
         FullAst::Leaf(tokens) => {
             // dbg!(&tokens);
-            let binary_ast = eval::tokens_to_ast(tokens, &mut state.current_position);
+            let binary_ast = eval::tokens_to_ast(tokens, state);
             // panic!("{ast:?}");
             eval::binary_ast_to_int(&binary_ast, state)
         }

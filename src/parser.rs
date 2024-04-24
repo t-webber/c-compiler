@@ -34,6 +34,8 @@
 //     While,
 // }
 
+use crate::{arithmetic::CheckedOperations, errors::FilePosition, structs::ParsingState};
+
 #[allow(unused)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum UnaryOperator {
@@ -226,28 +228,24 @@ pub enum PreprocessorToken {
 
 fn is_not_operator(ch: char) -> bool {
     const OPERATORS: [char; 26] = [
-        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']',
-        '=', ',', ';', ':', '?', '~', '#', '\\',
+        ' ', '!', '+', '-', '*', '/', '%', '&', '|', '^', '<', '>', '(', ')', '{', '}', '[', ']', '=', ',', ';', ':', '?', '~', '#', '\\',
     ];
     !OPERATORS.contains(&ch)
 }
 
 #[rustfmt::skip]
-fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
+fn token_from_str(token_str: &str, current_position: &FilePosition) -> Option<PreprocessorToken> {
     if token_str.is_empty() {
         return None;
     }
+    ;
     let no_operator = token_str.chars().all(is_not_operator);
     
-    let token = if let Ok(number) = token_str.parse::<f32>() {
-        if no_operator {
-            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
-            PreprocessorToken::LiteralNumber(number as i32)
-        } else {
-            return None;
-        }
+    if let Ok(number) = token_str.parse::<f32>() {
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+        no_operator.then_some(PreprocessorToken::LiteralNumber(number as i32))
     } else {
-        match token_str {
+        Some(match token_str {
             "?" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Interrogation),
             ":" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon),
             "*" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Mul)),
@@ -294,53 +292,49 @@ fn token_from_str(token_str: &str) -> Option<PreprocessorToken> {
                     && token_str
                         .char_indices()
                         .skip(1)
-                        .all(|(i, ch)| ch != '\"' || i == (token_str.len() - 1)))
+                        .all(|(i, ch)| ch != '\"' || i == (token_str.len().checked_sub_unwrap(1, current_position))))
                     || (token_str.starts_with('\'')
                         && token_str
                             .char_indices()
                             .skip(1)
-                            .all(|(i, ch)| ch != '\'' || i == (token_str.len() - 1)))
+                            .all(|(i, ch)| ch != '\'' || i == (token_str.len().checked_sub_unwrap(1, current_position))))
                 {
                     PreprocessorToken::LiteralString(
                         token_str
-                            .get(1..token_str.len() - 1)
+                            .get(1..token_str.len().checked_sub_unwrap(1, current_position))
                             .expect("Catastrophic failure")
                             .to_owned(),
                     )
                 } else if no_operator {
                     PreprocessorToken::Macro(token_str.to_owned())
                 } else {
-                    return None;
+                    return None
                 }
             }
-        }
-    };
-    Some(token)
+        })
+    }
 }
 
 #[rustfmt::skip]
-pub fn parse_preprocessor(string: &str) -> Vec<PreprocessorToken> {
+pub fn parse_preprocessor(string: &str, state: &mut ParsingState) -> Vec<PreprocessorToken> {
     let mut tokens: Vec<PreprocessorToken> = vec![];
     let mut current_token = String::new();
     string.chars().for_each(|ch| {
         let mut new_token = current_token.clone();
         new_token.push(ch);
-        // println!("Current = {current_token:?} and new = {new_token:?}");
-        if token_from_str(&new_token).is_some() {
+        if token_from_str(&new_token, &state.current_position).is_some() {
             current_token = new_token;
-            // println!("Chose new");
-        } else if let Some(token) = token_from_str(&current_token) {
+        } else if let Some(token) = token_from_str(&current_token, &state.current_position) {
             tokens.push(token);
             current_token.clear();
             current_token.push(ch);
-            // println!("Chose current");
         } else {
             current_token.clear();
             current_token.push(ch);
-            // println!("Chose none");
         }
+        state.current_position.col = state.current_position.col.checked_add_unwrap(1, &state.current_position);
     });
-    if let Some(token) = token_from_str(&current_token) {
+    if let Some(token) = token_from_str(&current_token, &state.current_position) {
         tokens.push(token);
     }
     tokens

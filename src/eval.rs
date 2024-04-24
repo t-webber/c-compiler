@@ -5,6 +5,7 @@ use crate::parser::{
     UnaryOperator,
 };
 use crate::structs::{MacroValue, ParsingState};
+use core::clone;
 
 #[allow(unused)]
 #[derive(Debug, Default, PartialEq)]
@@ -326,7 +327,7 @@ fn tokens_to_ast_impl(
 
 pub fn tokens_to_ast(
     tokens: &Vec<PreprocessorToken>,
-    current_position: &mut FilePosition,
+    state: &mut ParsingState,
 ) -> PreprocessorAst {
     tokens_to_ast_impl(
         tokens,
@@ -334,12 +335,11 @@ pub fn tokens_to_ast(
         PreprocessorAst::Empty,
         &mut Box::new(PreprocessorAst::Empty),
         None,
-        current_position,
+        &mut state.current_position,
         &mut 0,
     )
 }
 
-#[rustfmt::skip]
 pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut ParsingState) -> i32 {
     match ast {
         PreprocessorAst::Empty => 0,
@@ -397,14 +397,12 @@ pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut ParsingState) -> i32
         PreprocessorAst::Leaf(leaf) => match leaf {
             PreprocessorToken::Macro(macro_name) => {
                 let default = MacroValue::String(String::from("0"));
-                let macro_value = state.defines.get(macro_name).unwrap_or(&default);
-                // let macro_value = state.defines.get(macro_name).unwrap_or_else(|| panic!("{}", &compilation_error(&state.current_position, PreprocessorError::MacroNameNotFound("Manifestement on doit implémenter la ligne du dessus car les gens sont cons :)"))));
-                match macro_value {
-                    MacroValue::String(macro_string) => binary_ast_to_int(&tokens_to_ast(&parse_preprocessor(macro_string), &mut state.current_position), state),
-                    MacroValue::Function { .. } => {PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_warning(&state.current_position); 0},
+                if let MacroValue::String(macro_string) = state.defines.get(macro_name).map_or(default, clone::Clone::clone) {
+                    binary_ast_to_int(&tokens_to_ast(&parse_preprocessor(&macro_string, state), state), state)
+                } else {
+PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_warning(&state.current_position); 0
                 }
             },
-            #[allow(clippy::cast_possible_truncation)]
             PreprocessorToken::LiteralNumber(x) => *x,
             PreprocessorToken::LiteralString(_) => PreprocessorError::StringsNotAllowed.fail_with_panic(&state.current_position),
             PreprocessorToken::Operator(_) | PreprocessorToken::Bracing(_) | PreprocessorToken::NonOpSymbol(_) => PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_panic(&state.current_position),

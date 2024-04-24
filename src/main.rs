@@ -21,6 +21,8 @@ use std::env;
 
 use errors::{FailError, SystemError};
 
+use crate::structs::ParsingState;
+
 mod arithmetic;
 mod errors;
 mod eval;
@@ -42,28 +44,14 @@ fn main() -> Result<(), io::Error> {
     // Ok(())
 }
 
-enum A {
-    B,
-}
-
-impl A {
-    fn reogidfvksfpijorgefndkosfzrjn(self) -> Self {
-        self
-    }
-}
-
 #[allow(unused)]
 fn run_main(path: &str) -> io::Result<()> {
     if !SUPPORTED_OS.contains(&OS) {
         SystemError::UnsupportedOS.fail_with_panic(&structs::ParsingState::default().current_position);
     }
     let preprocessed_file = preprocessor::preprocess_unit(PathBuf::from(path));
-    let x = A::B
-        .reogidfvksfpijorgefndkosfzrjn()
-        .reogidfvksfpijorgefndkosfzrjn()
-        .reogidfvksfpijorgefndkosfzrjn();
-    // eprintln!("{preprocessed_file}");
     let mut data: &mut [u8] = &mut [0; 32];
+    #[allow(clippy::expect_used)]
     let mut file = File::create(format!(
         "{}i",
         &path
@@ -79,7 +67,7 @@ fn run_main(path: &str) -> io::Result<()> {
 fn test_parser(expression: &str) {
     let input = String::from(expression);
     dbg!(&input);
-    let tokens = parser::parse_preprocessor(&input);
+    let tokens = parser::parse_preprocessor(&input, &mut ParsingState::default());
     // dbg!(&tokens);
     // let tast = ternary::vec2ternary_ast(tokens);
     // dbg!(&expression);

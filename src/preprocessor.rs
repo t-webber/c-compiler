@@ -1,4 +1,3 @@
-use std::alloc::System;
 use std::env::consts::OS;
 use std::fs::File;
 use std::io::Read;
@@ -218,7 +217,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut ParsingState) -> D
         },
         ["if", expression_string] => {
             // let ast = vec2ternary_ast(parse_preprocessor(expression_string));
-            let res = eval_tokens(&parse_preprocessor(expression_string), state);
+            let res = eval_tokens(&parse_preprocessor(expression_string, state), state);
             Directive::If {
                 // expression: eval_all(&ast, state) != 0,
                 expression: res != 0,
@@ -226,7 +225,7 @@ fn convert_from_store(directive: &StoreDirective, state: &mut ParsingState) -> D
         }
         ["elif", expression_string] => {
             // let ast = vec2ternary_ast(parse_preprocessor(expression_string));
-            let res = eval_tokens(&parse_preprocessor(expression_string), state);
+            let res = eval_tokens(&parse_preprocessor(expression_string, state), state);
             Directive::Elif {
                 // expression: eval_all(&ast, state) != 0,
                 expression: res != 0,

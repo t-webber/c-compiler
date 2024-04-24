@@ -88,7 +88,7 @@ impl ParsingState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(unused, dead_code)]
 pub enum MacroValue {
     String(String),
