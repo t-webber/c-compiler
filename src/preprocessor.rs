@@ -73,22 +73,29 @@ fn preprocess_define(directive: &Directive, state: &mut State) -> String {
 }
 
 fn look_for_file(filename: &String, state: &mut State) -> File {
-    let mut places = match PathBuf::from(&state.current_position.filepath).parent() {
-        Some(path) => vec![path.to_owned()],
-        None => {
-            GeneralError::AccessLocalDenied.fail_with_warning(&state.current_position);
-            vec![]
-        }
-    };
-    if OS == "linux" {
-        places.push(PathBuf::from("/usr/include/"));
-        places.push(PathBuf::from("/usr/local/include/"));
-        places.push(PathBuf::from("/usr/include/x86_64-linux-gnu/"));
-        places.push(PathBuf::from("/usr/lib/llvm-14/lib/clang/14.0.0/include/"));
-    // } else if OS == "windows" {
+    let mut places: Vec<PathBuf> = if OS == "linux" {
+        vec![
+            "/usr/include/",
+            "/usr/local/include/",
+            "/usr/include/x86_64-linux-gnu/",
+            "/usr/lib/llvm-14/lib/clang/14.0.0/include/",
+        ]
+    } else if OS == "windows" {
+        vec![
+            "D:\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt\\",
+            "D:\\Windows Kits\\10\\Include\\10.0.22621.0\\shared\\",
+            "D:\\Windows\\Apps\\Visual\\Studio\\IDE\\VC\\Tools\\MSVC\\14.39.33519\\include\\",
+        ]
     } else {
         SystemError::UnsupportedOS(OS).fail_with_panic(&state.current_position);
     }
+    .iter()
+    .map(|path: &&str| PathBuf::from(path))
+    .collect();
+    match PathBuf::from(&state.current_position.filepath).parent() {
+        Some(path) => places.push(path.to_owned()),
+        None => GeneralError::AccessLocalDenied.fail_with_warning(&state.current_position),
+    };
     for place in places {
         let filepath = place.join(Path::new(&filename));
         if filepath.exists() {

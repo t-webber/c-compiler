@@ -22,7 +22,7 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-const SUPPORTED_OS: [&str; 1] = ["linux"];
+const SUPPORTED_OS: [&str; 2] = ["linux", "windows"];
 
 #[allow(unused)]
 use std::env;
