@@ -37,7 +37,7 @@ _main:
 
     jmp StartLoop
 
-    EndLcoop:
+    EndLoop:
 
     ; ExitProcess(0)
     push 0

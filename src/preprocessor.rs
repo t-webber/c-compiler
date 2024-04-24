@@ -1,8 +1,9 @@
+use std::env::consts::OS;
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use crate::errors::{GeneralError, PreprocessorError};
+use crate::errors::{FailError, GeneralError, PreprocessorError, SystemError};
 use crate::parser::parse_preprocessor;
 use crate::reader::eval_tokens;
 use crate::structs::{Directive, MacroValue, Pips, State, StoreDirective};
@@ -72,16 +73,22 @@ fn preprocess_define(directive: &Directive, state: &mut State) -> String {
 }
 
 fn look_for_file(filename: &String, state: &mut State) -> File {
-    let places: Vec<PathBuf> = vec![
-        PathBuf::from(&state.current_position.filepath)
-            .parent()
-            .expect("Invalid path")
-            .to_owned(),
-        PathBuf::from("/usr/include/"),
-        PathBuf::from("/usr/local/include/"),
-        PathBuf::from("/usr/include/x86_64-linux-gnu/"),
-        PathBuf::from("/usr/lib/llvm-14/lib/clang/14.0.0/include/"),
-    ];
+    let mut places = match PathBuf::from(&state.current_position.filepath).parent() {
+        Some(path) => vec![path.to_owned()],
+        None => {
+            GeneralError::AccessLocalDenied.fail_with_warning(&state.current_position);
+            vec![]
+        }
+    };
+    if OS == "linux" {
+        places.push(PathBuf::from("/usr/include/"));
+        places.push(PathBuf::from("/usr/local/include/"));
+        places.push(PathBuf::from("/usr/include/x86_64-linux-gnu/"));
+        places.push(PathBuf::from("/usr/lib/llvm-14/lib/clang/14.0.0/include/"));
+    // } else if OS == "windows" {
+    } else {
+        SystemError::UnsupportedOS(OS).fail_with_panic(&state.current_position);
+    }
     for place in places {
         let filepath = place.join(Path::new(&filename));
         if filepath.exists() {

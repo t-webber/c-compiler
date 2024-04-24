@@ -1,10 +1,10 @@
-rmdir -recurse .build
-
 pdflatex errors.tex
 
-mkdir -p .build | Out-Null
+new-item -itemtype directory .build | out-null
 
-mv tex* .build/
-mv errors.* .build/
+move-item tex* .build/
+move-item errors.* .build/
+move-item ./.build/errors.tex ./ 
+move-item ./.build/errors.pdf ./ 
 
-mv ./.build/errors.tex ./ 
+remove-item .build -recurse -force -erroraction silentlycontinue

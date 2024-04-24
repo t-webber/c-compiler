@@ -17,12 +17,17 @@
 #![allow(clippy::blanket_clippy_restriction_lints)]
 #![allow(clippy::arithmetic_side_effects)]
 
+use std::env::consts::OS;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
+const SUPPORTED_OS: [&str; 1] = ["linux"];
+
 #[allow(unused)]
 use std::env;
+
+use errors::{FailError, SystemError};
 
 mod errors;
 mod eval;
@@ -46,6 +51,9 @@ fn main() -> Result<(), io::Error> {
 
 #[allow(unused)]
 fn run_main(path: &str) -> io::Result<()> {
+    if !SUPPORTED_OS.contains(&OS) {
+        SystemError::UnsupportedOS(OS).fail_with_panic(&structs::State::default().current_position);
+    }
     let preprocessed_file = preprocessor::preprocess_unit(PathBuf::from(path));
     // eprintln!("{preprocessed_file}");
     let mut data: &mut [u8] = &mut [0; 32];

@@ -1,5 +1,5 @@
 use crate::{
-    errors::PreprocessorError,
+    errors::{FailError, PreprocessorError},
     parser::{Bracing, PreprocessorToken},
     structs::{MacroValue, State},
     ternary::{eval_all, vec2ternary_ast},
@@ -51,7 +51,7 @@ fn eval_between_parenthesis(
     }
     match outtokens.len() {
         0 => panic!("Empty parenthesis."),
-        1 => return outtokens.get(0).unwrap().clone(),
+        1 => return outtokens.first().unwrap().clone(),
         _ => {
             let tern = vec2ternary_ast(outtokens);
             // dbg!(&tern);

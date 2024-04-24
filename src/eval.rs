@@ -1,4 +1,4 @@
-use crate::errors::{FilePosition, PreprocessorError};
+use crate::errors::{FailError, FilePosition, PreprocessorError};
 use crate::parser::{parse_preprocessor, Associativity, Bracing, Operator, PreprocessorToken};
 use crate::structs::{MacroValue, State};
 
@@ -305,7 +305,7 @@ fn tokens_to_ast_impl(
                     match bracing {
                         Bracing::LeftParenthesis => {
                             *parenthesis_level += 1;
-                            let next = tokens_to_ast_impl(
+                            tokens_to_ast_impl(
                                 tokens,
                                 index,
                                 PreprocessorAst::Empty,
@@ -313,8 +313,7 @@ fn tokens_to_ast_impl(
                                 None,
                                 current_position,
                                 parenthesis_level,
-                            );
-                            next
+                            )
                             // tokens_to_ast_impl_or_acc3(tokens, index, next, acc3, None, current_position, parenthesis_level)
                             // tokens_to_ast_impl(tokens, index, acc, acc3, None, current_position, parenthesis_level)
                         }
@@ -431,7 +430,7 @@ pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut State) -> i32 {
         PreprocessorAst::Empty => 0,
         PreprocessorAst::TernaryOperator { operator, left, center, right } => match operator {
             Operator::Conditional => if binary_ast_to_int(left, state)!=0 { binary_ast_to_int(center, state) } else { binary_ast_to_int(right, state) },
-            _ => panic!("Read a unary or binary operator as a ternary operato")
+            Operator::Plus | Operator::Minus | Operator::Not | Operator::BitwiseNot | Operator::Add | Operator::Sub | Operator::Mul | Operator::Div | Operator::Mod | Operator::BitwiseAnd | Operator::BitwiseOr | Operator::BitwiseXor | Operator::And | Operator::Or | Operator::ShiftLeft | Operator::ShiftRight | Operator::Increment | Operator::Decrement | Operator::NotEqual | Operator::Eequal | Operator::LessThan | Operator::GreaterThan | Operator::LessEqual | Operator::GreaterEqual | Operator::AddAssign | Operator::SubAssign | Operator::MulAssign | Operator::DivAssign | Operator::ModAssign | Operator::OrAssign | Operator::AndAssign | Operator::XorAssign | Operator::ShiftLeftAssign | Operator::ShiftRightAssign | Operator::Defined => panic!("Read a unary or binary operator as a ternary operato")
         },
         PreprocessorAst::BinaryOperator { operator, left, right } => {let (x, y) = (binary_ast_to_int(left, state), binary_ast_to_int(right, state)); match operator {
             Operator::Plus|Operator::Minus|Operator::Not|Operator::AddAssign|Operator::SubAssign

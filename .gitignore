@@ -1,10 +1,7 @@
 target
 .vscode
-Cargo.lock
-docs/cargo
-.build
-dist
-.*
-*.exe
-*.obj
+*.lock
+.*/
 *test*
+asm/*.exe
+asm/*.obj

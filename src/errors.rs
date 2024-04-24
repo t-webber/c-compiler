@@ -6,8 +6,29 @@ pub struct FilePosition {
     pub filepath: String,
 }
 
+trait GetCode<'msg> {
+    const INCREMENT: u32;
+    fn get_code(&'msg self) -> (u32, String);
+}
+
 #[allow(unused)]
-#[derive(Debug)]
+pub enum SystemError<'msg> {
+    UnsupportedOS(&'msg str),
+}
+
+impl<'msg> GetCode<'msg> for SystemError<'msg> {
+    const INCREMENT: u32 = 0;
+    fn get_code(&self) -> (u32, String) {
+        match self {
+            SystemError::UnsupportedOS(msg) => (
+                9,
+                String::from(&format!("operating system '{msg}' isn't supported")),
+            ),
+        }
+    }
+}
+
+#[allow(unused)]
 pub enum GeneralError<'msg> {
     UnclosedComment {
         file_position: &'msg FilePosition,
@@ -19,10 +40,12 @@ pub enum GeneralError<'msg> {
     UnclosedBracket,
     UnclosedBrace,
     MainNotFound,
+    AccessLocalDenied,
 }
 
 #[rustfmt::skip]
-impl<'msg> GeneralError<'msg> {
+impl<'msg> GetCode<'msg> for GeneralError<'msg> {
+    const INCREMENT: u32 = 100;
     fn get_code(&self) -> (u32, String) {
         match self {
             GeneralError::UnclosedComment {file_position , level} => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
@@ -33,12 +56,12 @@ impl<'msg> GeneralError<'msg> {
             GeneralError::UnclosedBracket => (5, String::from("unclosed bracket")),
             GeneralError::UnclosedBrace => (6, String::from("unclosed brace")),
             GeneralError::MainNotFound => (7, String::from("main not found")),
+            GeneralError::AccessLocalDenied => (8, String::from("path to the source code is denied")),
         }
     }
 }
 
 #[allow(unused)]
-#[derive(Debug)]
 pub enum PreprocessorError<'msg> {
     Internal(&'msg str),
     //
@@ -70,7 +93,8 @@ pub enum PreprocessorError<'msg> {
 }
 
 #[rustfmt::skip]
-impl<'msg> PreprocessorError<'msg> {
+impl<'msg> GetCode<'msg> for PreprocessorError<'msg> {
+    const INCREMENT: u32 = 200;
     fn get_code(&'msg self) -> (u32, String) {
         match self {
             PreprocessorError::Internal(message) => (99, format!("internal error: {message}.\nPlease raise an issue") ),
@@ -104,44 +128,86 @@ impl<'msg> PreprocessorError<'msg> {
     }
 }
 
-#[rustfmt::skip]
-impl<'msg> GeneralError<'msg> {
-        pub fn fail(self, current_position: &FilePosition) -> String {
-            let (code, message) = self.get_code();
-            format!(
-                    "\n[ERROR: {:0>3}]\t{}:{}:{}   {:?}",
-                    code.checked_add(10).unwrap_or(10), current_position.filepath, current_position.line, current_position.col, message
-                )
-        }
+pub trait FailError {
+    fn fail(self, current_position: &FilePosition) -> String;
+    fn fail_with_panic(self, current_position: &FilePosition) -> !;
+    fn fail_with_warning(self, current_position: &FilePosition);
+}
 
-        #[allow(clippy::panic)]
-        pub fn fail_with_panic(self, current_position: &FilePosition) -> ! {
-            panic!("{}", self.fail(current_position));
-        }
-        
-        #[allow(clippy::print_stderr)]
-        #[allow(unused)]
-        pub fn fail_with_warning(self, current_position: &FilePosition) {
-            eprintln!("{}", self.fail(current_position));
-        }
+impl<'msg> FailError for SystemError<'msg> {
+    fn fail(self, current_position: &FilePosition) -> String {
+        let (code, message) = self.get_code();
+        format!(
+            "\n[ERROR {:0>3}]\t{}:{}:{}   {:?}",
+            code.checked_add(Self::INCREMENT).unwrap_or(Self::INCREMENT),
+            current_position.filepath,
+            current_position.line,
+            current_position.col,
+            message
+        )
     }
 
-#[allow(clippy::panic)]
-#[rustfmt::skip]
-impl<'msg> PreprocessorError<'msg> {
-        pub fn fail(self, current_position: &FilePosition) -> String {
-            let (code, message) = self.get_code();
-             format!(
-                    "\n[ERROR {:0>3}]\t{}:{}:{}   {:?}",
-                    code.checked_add(100).unwrap_or(100), current_position.filepath, current_position.line, current_position.col, message
-                )
-        }
-
-        pub fn fail_with_panic(self, current_position: &FilePosition) -> ! {
-            panic!("{}", self.fail(current_position));
-        }
-        
-        pub fn fail_with_warning(self, current_position: &FilePosition) {
-            eprintln!("{}", self.fail(current_position));
-        }
+    #[allow(clippy::panic)]
+    #[allow(unused)]
+    fn fail_with_panic(self, current_position: &FilePosition) -> ! {
+        panic!("{}", self.fail(current_position));
     }
+
+    #[allow(clippy::print_stderr)]
+    #[allow(unused)]
+    fn fail_with_warning(self, current_position: &FilePosition) {
+        eprintln!("{}", self.fail(current_position));
+    }
+}
+
+impl<'msg> FailError for GeneralError<'msg> {
+    fn fail(self, current_position: &FilePosition) -> String {
+        let (code, message) = self.get_code();
+        format!(
+            "\n[ERROR: {:0>3}]\t{}:{}:{}   {:?}",
+            code.checked_add(Self::INCREMENT).unwrap_or(Self::INCREMENT),
+            current_position.filepath,
+            current_position.line,
+            current_position.col,
+            message
+        )
+    }
+
+    #[allow(clippy::panic)]
+    #[allow(unused)]
+    fn fail_with_panic(self, current_position: &FilePosition) -> ! {
+        panic!("{}", self.fail(current_position));
+    }
+
+    #[allow(clippy::print_stderr)]
+    #[allow(unused)]
+    fn fail_with_warning(self, current_position: &FilePosition) {
+        eprintln!("{}", self.fail(current_position));
+    }
+}
+
+impl<'msg> FailError for PreprocessorError<'msg> {
+    fn fail(self, current_position: &FilePosition) -> String {
+        let (code, message) = self.get_code();
+        format!(
+            "\n[ERROR {:0>3}]\t{}:{}:{}   {:?}",
+            code.checked_add(Self::INCREMENT).unwrap_or(Self::INCREMENT),
+            current_position.filepath,
+            current_position.line,
+            current_position.col,
+            message
+        )
+    }
+
+    #[allow(clippy::panic)]
+    #[allow(unused)]
+    fn fail_with_panic(self, current_position: &FilePosition) -> ! {
+        panic!("{}", self.fail(current_position));
+    }
+
+    #[allow(clippy::print_stderr)]
+    #[allow(unused)]
+    fn fail_with_warning(self, current_position: &FilePosition) {
+        eprintln!("{}", self.fail(current_position));
+    }
+}

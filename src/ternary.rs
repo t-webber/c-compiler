@@ -74,8 +74,8 @@ impl FullAstElt {
 #[rustfmt::skip]
 impl TryFrom<Vec<PreprocessorToken>> for FullAstElt {
     fn try_from(iter: Vec<PreprocessorToken>) -> Result<Self, Self::Error> {
-        let open = Some(*iter.get(0).unwrap() == PreprocessorToken::Bracing(Bracing::LeftParenthesis));
-        let close = iter[iter.len() - 1] == PreprocessorToken::Bracing(Bracing::LeftParenthesis);
+        let open = Some(*iter.first().unwrap() == PreprocessorToken::Bracing(Bracing::LeftParenthesis));
+        let close = iter.get(iter.len() - 1).is_some_and(|inner| inner == &PreprocessorToken::Bracing(Bracing::LeftParenthesis));
         Ok(Self {
             elts: iter,
             open,
@@ -188,4 +188,3 @@ pub fn eval_all(no_ternaries_ast: &FullAst, state: &mut State) -> i32 {
         }
     }
 }
-
