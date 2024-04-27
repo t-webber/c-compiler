@@ -16,13 +16,18 @@ pub fn deal_with_c(ch: char, state: &mut ParsingState, current_directive: &mut S
     match &mut state.directive_parsing {
         Pips::None => String::from(ch),
         Pips::DirectiveName(name) if ch.is_whitespace() && name.is_empty() => {String::new()},
-        Pips::DirectiveName(name) if ch.is_whitespace() => {tmp_dir_state = Some(if name.trim()=="define" { Pips::DirectiveArgs(vec![]) } else { Pips::DirectiveValue(String::new()) }); current_directive.values.push(name.clone()); String::new()},
+        Pips::DirectiveName(name) if ch.is_whitespace() => {tmp_dir_state = Some(if name.trim() == "define" { Pips::DirectiveArgs(vec![]) } else { Pips::DirectiveValue(String::new()) }); current_directive.values.push(name.clone()); String::new()},
         Pips::DirectiveName(ref mut name) =>{name.push(ch); String::new()},
         Pips::DirectiveArgs(ref mut args ) if args.is_empty() && ch == '(' => {args.push(String::new()); String::new()},
-        Pips::DirectiveArgs(_) if ch == '(' => panic!("Nested parenthesis are not supported"),
+        Pips::DirectiveArgs(_) if ch == '(' => GeneralError::NotImplemented("Nested parenthesis are not supported in macro arguments").fail_with_panic(&state.current_position),
         Pips::DirectiveArgs(ref mut args ) if ch == ')' => {tmp_dir_state = Some(Pips::DirectiveValue(String::new())); current_directive.values.extend(args.iter().map(Clone::clone)); String::new()},
-        Pips::DirectiveArgs(ref mut args ) if args.is_empty() => {tmp_dir_state = Some(Pips::DirectiveValue(String::from(ch))); String::new()},
-        Pips::DirectiveArgs(ref mut args ) => {args.last_mut().expect("Fatal Error: we're fucked!").push(ch); String::new()},
+        Pips::DirectiveArgs(ref mut args ) => {
+            match args.last_mut() {
+                Some(last) => last.push(ch),
+                None => tmp_dir_state = Some(Pips::DirectiveValue(String::from(ch))),
+            };
+            String::new()
+        },
         Pips::DirectiveValue(ref mut value) => {value.push(ch); String::new()},
     };
     if let Some(newstate) = tmp_dir_state {
@@ -31,26 +36,49 @@ pub fn deal_with_c(ch: char, state: &mut ParsingState, current_directive: &mut S
     res
 }
 
-#[rustfmt::skip]
 pub fn preprocess_character(ch: char, state: &mut ParsingState, previous_char: &mut char, current_directive: &mut StoreDirective) -> String {
-    let in_comment = state.comment_level>0 || state.inline_comment;
+    let in_comment = state.comment_level > 0 || state.inline_comment;
     // Match double chars tokens
     let prev = *previous_char;
     *previous_char = ch;
     let character = match ch {
-        '/' if prev =='*' && in_comment => {state.comment_level=state.comment_level.checked_sub(1).expect("*/ unmatched");*previous_char=' ';state.inline_comment=false;String::new()},
-        '/' if prev =='*' => { GeneralError::UnclosedComment { file_position: &state.current_position, level: state.comment_level }.fail_with_panic(&state.current_position)},
-        '/' if prev =='/' => {state.inline_comment=true;*previous_char=' ';String::new()} ,
-        '*' if prev =='/' => {state.comment_level+=1;state.comment_unclosed_positon.push(state.current_position.clone());*previous_char=' ';String::new()},
-        _ if (prev=='/' || prev=='*') && in_comment => {  String::new() },
-        _ if prev=='/' || prev=='*' => { deal_with_c(prev, state, current_directive) + deal_with_c(ch, state, current_directive).as_str() },
-        '/'|'*' => { String::new() }
-        _ if in_comment => { String::new() },
-        '#' => match state.directive_parsing {
-                Pips::None => { state.directive_parsing = Pips::DirectiveName(String::new()); String::new() },
-                Pips::DirectiveName(_) | Pips::DirectiveArgs(_) | Pips::DirectiveValue(_) => {deal_with_c(ch, state, current_directive)}
+        | '/' if prev == '*' && in_comment => {
+            state.comment_level = state
+                .comment_level
+                .checked_sub(1)
+                .unwrap_or_else(|| GeneralError::UnOpenedComment { level: state.comment_level }.fail_with_panic(&state.current_position));
+            *previous_char = ' ';
+            state.inline_comment = false;
+            String::new()
+        },
+        | '/' if prev == '*' => GeneralError::UnclosedComment {
+            file_position: &state.current_position,
+            level: state.comment_level,
+        }
+        .fail_with_panic(&state.current_position),
+        | '/' if prev == '/' => {
+            state.inline_comment = true;
+            *previous_char = ' ';
+            String::new()
+        },
+        | '*' if prev == '/' => {
+            state.comment_level.checked_add_assign_unwrap(1, &state.current_position);
+            state.comment_unclosed_positon.push(state.current_position.clone());
+            *previous_char = ' ';
+            String::new()
+        },
+        | _ if (prev == '/' || prev == '*') && in_comment => String::new(),
+        | _ if prev == '/' || prev == '*' => deal_with_c(prev, state, current_directive) + deal_with_c(ch, state, current_directive).as_str(),
+        | '/' | '*' => String::new(),
+        | _ if in_comment => String::new(),
+        | '#' => match state.directive_parsing {
+            | Pips::None => {
+                state.directive_parsing = Pips::DirectiveName(String::new());
+                String::new()
             },
-        _ => { deal_with_c(ch, state, current_directive) }
+            | Pips::DirectiveName(_) | Pips::DirectiveArgs(_) | Pips::DirectiveValue(_) => deal_with_c(ch, state, current_directive),
+        },
+        | _ => deal_with_c(ch, state, current_directive),
     };
     if state.if_writing {
         character
@@ -94,8 +122,8 @@ fn look_for_file(filename: &String, state: &mut ParsingState) -> File {
     .map(|path: &&str| PathBuf::from(path))
     .collect();
     match PathBuf::from(&state.current_position.filepath).parent() {
-        Some(path) => places.push(path.to_owned()),
-        None => SystemError::AccessLocalDenied.fail_with_warning(&state.current_position),
+        | Some(path) => places.push(path.to_owned()),
+        | None => SystemError::AccessLocalDenied.fail_with_warning(&state.current_position),
     };
     for place in places {
         let filepath = place.join(Path::new(&filename));
@@ -136,61 +164,71 @@ enum DirectiveParsingState {
     Value,
 }
 
-#[rustfmt::skip]
-fn convert_define_from_store(values: &&str, parsing_state: &ParsingState) -> Directive {
+fn convert_define_from_store(values: &&str, state: &ParsingState) -> Directive {
     let mut directive_state = DirectiveParsingState::Name;
     let mut brace_level: usize = 0;
     let mut macro_name = String::new();
     let mut args: Vec<String> = vec![];
     let mut value = String::new();
     values.chars().for_each(|ch| match ch {
-        _ if directive_state == DirectiveParsingState::Value => value.push(ch),
-        '(' if directive_state == DirectiveParsingState::Name || directive_state == DirectiveParsingState::AfterName => {
-                    brace_level += 1;
-                    directive_state = DirectiveParsingState::Args;
-                    args.push(String::new());
-                    value.push(ch);
-                }
-        '(' if brace_level > 0 => {
+        | _ if directive_state == DirectiveParsingState::Value => value.push(ch),
+        | '(' if directive_state == DirectiveParsingState::Name || directive_state == DirectiveParsingState::AfterName => {
+            brace_level.checked_add_assign_unwrap(1, &state.current_position);
+            directive_state = DirectiveParsingState::Args;
+            args.push(String::new());
+            value.push(ch);
+        },
+        | '(' if brace_level > 0 => {
             directive_state = DirectiveParsingState::Value;
             args.clear();
             value.push(ch);
-        }
-        '(' => {
-            brace_level += 1;
+        },
+        | '(' => {
+            brace_level.checked_add_assign_unwrap(1, &state.current_position);
             value.push(ch);
-        }
-        ' ' if directive_state == DirectiveParsingState::Name => directive_state = DirectiveParsingState::AfterName,
-        ' ' => {}
-        ')' if directive_state == DirectiveParsingState::Name => {
-            PreprocessorError::InvalidMacroName("Unexpected ')' in macro name").fail_with_panic(&parsing_state.current_position)
-        }
-        ')' if brace_level > 1 => {
-            brace_level -= 1;
+        },
+        | ' ' if directive_state == DirectiveParsingState::Name => directive_state = DirectiveParsingState::AfterName,
+        | ' ' => {},
+        | ')' if directive_state == DirectiveParsingState::Name => {
+            PreprocessorError::InvalidMacroName("Unexpected ')' in macro name").fail_with_panic(&state.current_position)
+        },
+        | ')' if brace_level > 1 => {
+            brace_level.checked_sub_assign_unwrap(1, &state.current_position);
             value.push(ch);
-            args.last_mut().unwrap().push(ch);
-        }
-        ')' if directive_state == DirectiveParsingState::Args => {
-            brace_level = brace_level.checked_sub(1).expect("Unmatched (");
+            args.last_mut()
+                .unwrap_or_else(|| GeneralError::UnOpenedParenthesis.fail_with_panic(&state.current_position))
+                .push(ch);
+        },
+        | ')' if directive_state == DirectiveParsingState::Args => {
+            brace_level = brace_level
+                .checked_sub(1)
+                .unwrap_or_else(|| GeneralError::UnclosedParenthesis.fail_with_panic(&state.current_position));
             directive_state = DirectiveParsingState::Value;
             value.clear();
-        }
-        ')' => value.push(ch),
-        ',' => args.push(String::new()),
-        _ if directive_state == DirectiveParsingState::Name => macro_name.push(ch),
-        _ if directive_state == DirectiveParsingState::AfterName => {
+        },
+        | ')' => value.push(ch),
+        | ',' => args.push(String::new()),
+        | _ if directive_state == DirectiveParsingState::Name => macro_name.push(ch),
+        | _ if directive_state == DirectiveParsingState::AfterName => {
             directive_state = DirectiveParsingState::Value;
             value.push(ch);
-        }
-        _ => {
-            args.last_mut().unwrap().push(ch);
+        },
+        | _ => {
+            args.last_mut()
+                .unwrap_or_else(|| {
+                    SystemError::CompilationError("Entered args mode for macro, but no arg buffer found").fail_with_panic(&state.current_position)
+                })
+                .push(ch);
             value.push(ch);
-        }
+        },
     });
     if value.is_empty() {
         value = format!(
             "({})",
-            args.iter().fold(String::new(), |mut acc, curr_string| {acc.push_str(curr_string); acc})
+            args.iter().fold(String::new(), |mut acc, curr_string| {
+                acc.push_str(curr_string);
+                acc
+            })
         );
         args.clear();
     }
@@ -264,20 +302,19 @@ fn convert_from_store(directive: &StoreDirective, state: &mut ParsingState) -> D
 
 #[rustfmt::skip]
 fn preprocess_directive(directive: &Directive, state: &mut ParsingState) -> String {
-    // println!("Directive: {directive:?}");
     if state.if_level > 0 {
         match directive {
             Directive::EndIf => {
-                state.if_level = state
+                state
                     .if_level
-                    .checked_sub(1)
-                    .expect("We're indeniably fucked");
+                    .checked_sub_assign_unwrap(1, &state.current_position);
             }
             Directive::Else { .. } | Directive::Elif { .. } => (),
             Directive::If { .. } => {
-                state.if_level += 1;
+                state.if_level.checked_add_assign_unwrap(1, &state.current_position);
                 return String::new();
-            },
+
+            }
             Directive::None | Directive::Define{ .. } | Directive::IfDef{ .. } | Directive::IfnDef{ .. } | Directive::Include{ .. } | Directive::Undef{ .. } | Directive::Warning{ .. } | Directive::Pragma{ .. } | Directive::Error{ .. } 
                 if state.if_writing => (),
             Directive::None | Directive::Define{ .. } | Directive::IfDef{ .. } | Directive::IfnDef{ .. } | Directive::Include{ .. } | Directive::Undef{ .. } | Directive::Warning{ .. } | Directive::Pragma{ .. } | Directive::Error{ .. } 
@@ -287,17 +324,17 @@ fn preprocess_directive(directive: &Directive, state: &mut ParsingState) -> Stri
     match directive {
         Directive::Define { .. } => preprocess_define(directive, state),
         Directive::IfDef { macro_name } => {
-            state.if_level += 1;
+            state.if_level.checked_add_assign_unwrap(1, &state.current_position);
             state.if_writing = state.defines.contains_key(macro_name);
             String::new()
         }
         Directive::IfnDef { macro_name } => {
-            state.if_level += 1;
+            state.if_level.checked_add_assign_unwrap(1, &state.current_position);
             state.if_writing = !state.defines.contains_key(macro_name);
             String::new()
         }
         Directive::If { expression } => {
-            state.if_level += 1;
+            state.if_level.checked_add_assign_unwrap(1, &state.current_position);
             state.if_writing = *expression;
             String::new()
         }
@@ -331,8 +368,8 @@ fn preprocess_directive(directive: &Directive, state: &mut ParsingState) -> Stri
             PreprocessorError::DirectiveWarning(message).fail_with_warning(&state.current_position);
             String::new()
         }
-        Directive::Pragma { message } => {
-            PreprocessorError::DirectiveUnknown(message).fail_with_warning(&state.current_position);
+        Directive::Pragma { .. } => {
+            PreprocessorError::DirectiveUnknown("pragma").fail_with_warning(&state.current_position);
             String::new()
         }
         Directive::None => 
@@ -348,20 +385,19 @@ pub fn preprocess(content: &str, state: &mut ParsingState) -> String {
     for line in content.lines() {
         let escaped = line.ends_with('\\');
         let trimed_line = if escaped {
-            line.get(0..line.len() - 1).unwrap_or_else(|| SystemError::CompilationError("EOL not found, but line ends with \\").fail_with_panic(&state.current_position))
+            line.get(0..line.len().checked_sub_unwrap(1, &state.current_position)).unwrap_or_else(|| SystemError::CompilationError("EOL not found, but line ends with \\").fail_with_panic(&state.current_position))
         } else {
             line
         };
         if previous_line_escaped {
             lines
-                .last_mut()
-                .expect("Unrecoverable error")
+                .last_mut().unwrap_or_else(|| SystemError::CompilationError("Previous escaped line was discarded").fail_with_panic(&state.current_position))
                 .1
                 .push_str(trimed_line.trim_start());
         } else {
             lines.push((line_number, String::from(trimed_line)));
         }
-        line_number += 1;
+        line_number.checked_add_assign_unwrap(1, &state.current_position);
         previous_line_escaped = escaped;
     }
 
@@ -378,7 +414,7 @@ pub fn preprocess(content: &str, state: &mut ParsingState) -> String {
             let mut preprocessed_line = line_string
                 .chars()
                 .map(|ch| {
-                    state.current_position.col += 1;
+                    state.current_position.col = state.current_position.col.checked_add_unwrap(1, &state.current_position);
                     preprocess_character(ch, state, &mut previous_char, &mut current_directive)
                 })
                 .collect::<String>();
@@ -406,7 +442,7 @@ pub fn preprocess(content: &str, state: &mut ParsingState) -> String {
     assert!(
         state.comment_level == 0,
         "{}",
-        GeneralError::UnclosedComment { file_position: state.comment_unclosed_positon.last().expect("Error raised but everything is fine!"), level: state.comment_level }.fail(&state.current_position)
+        GeneralError::UnclosedComment { file_position: &state.comment_unclosed_positon.pop().unwrap_or_default(), level: state.comment_level }.fail(&state.current_position)
     );
     state.end_file();
     processed_file
@@ -417,7 +453,6 @@ fn add_default_macro(state: &mut ParsingState) {
     let macros = &[
         //
         // Standard Predefined Macros
-        //
         ("__FILE__", "forgotten"),
         ("__LINE__", "1"), // mut
         ("__DATE__", "forgotten"),
@@ -427,7 +462,6 @@ fn add_default_macro(state: &mut ParsingState) {
         ("__STDC_HOSTED__", "1"),
         //
         // Common Predefined Macros
-        //
         ("__COUNTER__", "0"),
         ("__GNUC__", "10"),
         ("__GNUC_MINOR__", "3"),
@@ -562,7 +596,6 @@ fn add_default_macro(state: &mut ParsingState) {
         // __FLOAT_WORD_ORDER__
         //
         // System-specific Predefined Macros
-        //
         ("_DEFAULT_SOURCE", "1"),
         ("_BSD_SOURCE", "1"),
         ("_SVID_SOURCE", "1"),
@@ -617,25 +650,37 @@ fn add_default_macro(state: &mut ParsingState) {
     }
 }
 
-pub fn preprocess_unit(filepath: PathBuf) -> String {
+pub fn preprocess_unit(filepath: &PathBuf) -> String {
     let mut content = String::new();
-    File::open(&filepath)
-        .expect("Failed to read the file")
+    File::open(filepath)
+        .unwrap_or_else(|_| {
+            SystemError::AccessLibraryDenied(filepath.to_str().unwrap_or_default()).fail_with_panic(&ParsingState::default().current_position)
+        })
         .read_to_string(&mut content)
-        .expect("Failed to convert the file");
+        .unwrap_or_else(|_| {
+            SystemError::AccessLibraryDenied(filepath.to_str().unwrap_or_default()).fail_with_panic(&ParsingState::default().current_position)
+        });
     let mut state = ParsingState {
         if_writing: true,
         ..Default::default()
     };
     add_default_macro(&mut state);
     state.new_file(
+        // filepath.as_os_str().to_str().unwrap_or_default().to_owned(),
         filepath
             .file_name()
-            .expect("Invalid filepath")
-            .to_owned()
-            .into_string()
-            .expect("Invalid filename"),
-        filepath.into_os_string().into_string().expect("Invalid path"),
+            .and_then(|filename| filename.to_str())
+            .unwrap_or_else(|| {
+                PreprocessorError::InvalidFileName(filepath.as_os_str().to_str().unwrap_or("Unknown file")).fail_with_panic(&state.current_position)
+            })
+            .to_owned(),
+        filepath
+            .as_os_str()
+            .to_str()
+            .unwrap_or_else(|| {
+                PreprocessorError::InvalidFileName(filepath.as_os_str().to_str().unwrap_or("Unknown file")).fail_with_panic(&state.current_position)
+            })
+            .to_owned(),
     );
     preprocess(&content, &mut state)
 }

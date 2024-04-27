@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use crate::errors::FilePosition;
 
-/// Preprocessor Directive Parsing Parsing State
-///
+/// ### Preprocessor Directive Parsing State
 #[derive(Eq, PartialEq, Default, Debug)]
 pub enum Pips {
     #[default]
@@ -19,6 +18,7 @@ pub struct StoreDirective {
 }
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub enum Directive {
     #[default]
     None,
@@ -89,7 +89,7 @@ impl ParsingState {
 }
 
 #[derive(Debug, Clone)]
-#[allow(unused, dead_code)]
+#[allow(dead_code)]
 pub enum MacroValue {
     String(String),
     Function { args: Vec<String>, body: String },

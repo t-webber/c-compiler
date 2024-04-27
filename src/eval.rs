@@ -1,9 +1,6 @@
 use crate::arithmetic::CheckedOperations;
 use crate::errors::{FailError, FilePosition, PreprocessorError, SystemError};
-use crate::parser::{
-    parse_preprocessor, Associativity, BinaryOperator, Operator, OperatorTrait, PreprocessorToken,
-    UnaryOperator,
-};
+use crate::parser::{parse_preprocessor, Associativity, BinaryOperator, Operator, OperatorTrait, PreprocessorToken, UnaryOperator};
 use crate::structs::{MacroValue, ParsingState};
 use core::clone;
 
@@ -38,9 +35,9 @@ struct CurrentTree<'tree> {
 }
 
 #[rustfmt::skip]
-fn go_back_in_tokens(current_tree: CurrentTree, current_position: &FilePosition, current_operator: Option<&BinaryOperator>) -> PreprocessorAst {
+fn go_back_in_tokens(current_tree: CurrentTree, current_position: &FilePosition) -> PreprocessorAst {
     if current_tree.acc == PreprocessorAst::Empty {
-        PreprocessorError::IncompleteOperator(&format!("{current_operator:?}")).fail_with_panic(current_position)
+        PreprocessorError::IncompleteOperator.fail_with_panic(current_position)
     } else {
         current_tree.index.checked_sub_assign_unwrap(1, current_position);
         current_tree.acc
@@ -52,7 +49,7 @@ fn handle_binary(current_tree: CurrentTree, current_position: &mut FilePosition,
     let current_precedence = current_operator.precedence();
     let close_left = current_precedence>previous_precedence || (current_precedence==previous_precedence && current_operator.associativity() == Associativity::LeftToRight);
     if close_left {
-        go_back_in_tokens(current_tree, current_position, Some(current_operator))
+        go_back_in_tokens(current_tree, current_position)
     } else {
         let current_parenthesis_level: usize = *parenthesis_level;
         let right = tokens_to_ast_impl(
@@ -96,25 +93,9 @@ fn tokens_to_ast_impl_or_acc3(
     parenthesis_level: &mut usize,
 ) -> PreprocessorAst {
     if **acc3 == PreprocessorAst::Empty {
-        tokens_to_ast_impl(
-            tokens,
-            index,
-            acc,
-            acc3,
-            previous_operator,
-            current_position,
-            parenthesis_level,
-        )
+        tokens_to_ast_impl(tokens, index, acc, acc3, previous_operator, current_position, parenthesis_level)
     } else {
-        let result = tokens_to_ast_impl(
-            tokens,
-            index,
-            acc,
-            acc3,
-            previous_operator,
-            current_position,
-            parenthesis_level,
-        );
+        let result = tokens_to_ast_impl(tokens, index, acc, acc3, previous_operator, current_position, parenthesis_level);
         *acc3 = Box::new(result);
         // Will be thrown away anyway...
         PreprocessorAst::Empty
@@ -130,7 +111,7 @@ fn handle_unary(
     current_unary_operator: &UnaryOperator,
 ) -> PreprocessorAst {
     match current_unary_operator {
-        UnaryOperator::Plus | UnaryOperator::Minus => {
+        | UnaryOperator::Plus | UnaryOperator::Minus => {
             // False unary
             if current_tree.acc == PreprocessorAst::Empty {
                 // In this case, we have for example
@@ -150,16 +131,13 @@ fn handle_unary(
                 }
             } else {
                 let binary_current_operator = match current_unary_operator {
-                    UnaryOperator::Plus => BinaryOperator::Add,
-                    UnaryOperator::Minus => BinaryOperator::Sub,
-                    UnaryOperator::Not
+                    | UnaryOperator::Plus => BinaryOperator::Add,
+                    | UnaryOperator::Minus => BinaryOperator::Sub,
+                    | UnaryOperator::Not
                     | UnaryOperator::BitwiseNot
                     | UnaryOperator::Increment
                     | UnaryOperator::Decrement
-                    | UnaryOperator::Defined => PreprocessorError::BinarySynthaxOnUnary(&format!(
-                        "{current_unary_operator:?}"
-                    ))
-                    .fail_with_panic(current_position),
+                    | UnaryOperator::Defined => PreprocessorError::TooManyArguments.fail_with_panic(current_position),
                 };
                 handle_binary(
                     current_tree,
@@ -169,8 +147,8 @@ fn handle_unary(
                     parenthesis_level,
                 )
             }
-        }
-        UnaryOperator::Not | UnaryOperator::BitwiseNot | UnaryOperator::Defined => {
+        },
+        | UnaryOperator::Not | UnaryOperator::BitwiseNot | UnaryOperator::Defined => {
             if current_unary_operator.precedence() > previous_precedence {
                 // In this case, the only possibilities are:
                 //  defined !MACRO
@@ -209,14 +187,12 @@ fn handle_unary(
             } else {
                 // We were in a situation like
                 // a!b + ... : we read !
-                PreprocessorError::IncompleteOperator(&format!("{current_unary_operator:?}"))
-                    .fail_with_panic(current_position)
+                PreprocessorError::IncompleteOperator.fail_with_panic(current_position)
             }
-        }
-        UnaryOperator::Increment | UnaryOperator::Decrement => {
-            PreprocessorError::InvalidOperator(&format!("{current_unary_operator:?}"))
-                .fail_with_panic(current_position)
-        }
+        },
+        | UnaryOperator::Increment | UnaryOperator::Decrement => {
+            PreprocessorError::InvalidOperator(&format!("{current_unary_operator:?}")).fail_with_panic(current_position)
+        },
     }
 }
 
@@ -325,10 +301,7 @@ fn tokens_to_ast_impl(
     result
 }
 
-pub fn tokens_to_ast(
-    tokens: &Vec<PreprocessorToken>,
-    state: &mut ParsingState,
-) -> PreprocessorAst {
+pub fn tokens_to_ast(tokens: &Vec<PreprocessorToken>, state: &mut ParsingState) -> PreprocessorAst {
     tokens_to_ast_impl(
         tokens,
         &mut 0,
@@ -342,42 +315,58 @@ pub fn tokens_to_ast(
 
 pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut ParsingState) -> i32 {
     match ast {
-        PreprocessorAst::Empty => 0,
-        PreprocessorAst::TernaryTree { left, center, right } => {if binary_ast_to_int(left, state)!=0 { binary_ast_to_int(center, state) } else { binary_ast_to_int(right, state) }},
-        
-        PreprocessorAst::BinaryTree { binary_operator, left, right } => {let (x, y) = (binary_ast_to_int(left, state), binary_ast_to_int(right, state)); match binary_operator {
-            BinaryOperator::Add => x.checked_add_unwrap(y, &state.current_position),
-            BinaryOperator::Sub => x.checked_sub_unwrap(y, &state.current_position),
-            BinaryOperator::Mul => x.checked_mul_unwrap(y, &state.current_position),
-            BinaryOperator::Div => x.div_euclid(y),
-            BinaryOperator::Mod => x.rem_euclid(y),
-            BinaryOperator::ShiftLeft => x<<y,
-            BinaryOperator::ShiftRight => x>>y,
-            BinaryOperator::BitwiseAnd => x&y,
-            BinaryOperator::BitwiseOr => x|y,
-            BinaryOperator::BitwiseXor => x^y,
-            BinaryOperator::And => i32::from((x!=0) && (y!=0)),
-            BinaryOperator::Or => i32::from((x!=0) || (y!=0)),
-            BinaryOperator::NotEqual => i32::from(x != y),
-            BinaryOperator::Eequal => i32::from(x == y),
-            BinaryOperator::LessThan => i32::from(x < y),
-            BinaryOperator::GreaterThan => i32::from(x > y),
-            BinaryOperator::LessEqual => i32::from(x <= y),
-            BinaryOperator::GreaterEqual => i32::from(x >= y),
-            BinaryOperator::AddAssign | 
-            BinaryOperator::SubAssign | 
-            BinaryOperator::MulAssign | 
-            BinaryOperator::DivAssign | 
-            BinaryOperator::ModAssign | 
-            BinaryOperator::OrAssign | 
-            BinaryOperator::AndAssign | 
-            BinaryOperator::XorAssign | 
-            BinaryOperator::ShiftLeftAssign | 
-            BinaryOperator::ShiftRightAssign => PreprocessorError::InvalidOperator(&format!("{binary_operator:?}")).fail_with_panic(&state.current_position),
-        }},
-        PreprocessorAst::UnaryTree { unary_operator, child } => {
-            let x = binary_ast_to_int(child, state); match unary_operator {
-                UnaryOperator::Defined => 
+        | PreprocessorAst::Empty => 0,
+        | PreprocessorAst::TernaryTree { left, center, right } => {
+            if binary_ast_to_int(left, state) != 0 {
+                binary_ast_to_int(center, state)
+            } else {
+                binary_ast_to_int(right, state)
+            }
+        },
+
+        | PreprocessorAst::BinaryTree {
+            binary_operator,
+            left,
+            right,
+        } => {
+            let (x, y) = (binary_ast_to_int(left, state), binary_ast_to_int(right, state));
+            match binary_operator {
+                | BinaryOperator::Add => x.checked_add_unwrap(y, &state.current_position),
+                | BinaryOperator::Sub => x.checked_sub_unwrap(y, &state.current_position),
+                | BinaryOperator::Mul => x.checked_mul_unwrap(y, &state.current_position),
+                | BinaryOperator::Div => x.div_euclid(y),
+                | BinaryOperator::Mod => x.rem_euclid(y),
+                | BinaryOperator::ShiftLeft => x << y,
+                | BinaryOperator::ShiftRight => x >> y,
+                | BinaryOperator::BitwiseAnd => x & y,
+                | BinaryOperator::BitwiseOr => x | y,
+                | BinaryOperator::BitwiseXor => x ^ y,
+                | BinaryOperator::And => i32::from((x != 0) && (y != 0)),
+                | BinaryOperator::Or => i32::from((x != 0) || (y != 0)),
+                | BinaryOperator::NotEqual => i32::from(x != y),
+                | BinaryOperator::Eequal => i32::from(x == y),
+                | BinaryOperator::LessThan => i32::from(x < y),
+                | BinaryOperator::GreaterThan => i32::from(x > y),
+                | BinaryOperator::LessEqual => i32::from(x <= y),
+                | BinaryOperator::GreaterEqual => i32::from(x >= y),
+                | BinaryOperator::AddAssign
+                | BinaryOperator::SubAssign
+                | BinaryOperator::MulAssign
+                | BinaryOperator::DivAssign
+                | BinaryOperator::ModAssign
+                | BinaryOperator::OrAssign
+                | BinaryOperator::AndAssign
+                | BinaryOperator::XorAssign
+                | BinaryOperator::ShiftLeftAssign
+                | BinaryOperator::ShiftRightAssign => {
+                    PreprocessorError::InvalidOperator(&format!("{binary_operator:?}")).fail_with_panic(&state.current_position)
+                },
+            }
+        },
+        | PreprocessorAst::UnaryTree { unary_operator, child } => {
+            let x = binary_ast_to_int(child, state);
+            match unary_operator {
+                | UnaryOperator::Defined => {
                     if let PreprocessorAst::Leaf(macro_token) = child.as_ref() {
                         if let PreprocessorToken::Macro(macro_name) = &macro_token {
                             i32::from(state.defines.contains_key(macro_name))
@@ -386,26 +375,32 @@ pub fn binary_ast_to_int(ast: &PreprocessorAst, state: &mut ParsingState) -> i32
                         }
                     } else {
                         PreprocessorError::DefinedChildNotLeaf.fail_with_panic(&state.current_position)
-                    },
-                UnaryOperator::Plus => x,
-                UnaryOperator::Minus => x.checked_neg_unwrap(&state.current_position),
-                UnaryOperator::Not => i32::from(x==0),
-                UnaryOperator::BitwiseNot => !x,
-                UnaryOperator::Increment | UnaryOperator::Decrement => PreprocessorError::InvalidOperator(&format!("{:?}", &unary_operator)).fail_with_panic(&state.current_position),
+                    }
+                },
+                | UnaryOperator::Plus => x,
+                | UnaryOperator::Minus => x.checked_neg_unwrap(&state.current_position),
+                | UnaryOperator::Not => i32::from(x == 0),
+                | UnaryOperator::BitwiseNot => !x,
+                | UnaryOperator::Increment | UnaryOperator::Decrement => {
+                    PreprocessorError::InvalidOperator(&format!("{:?}", &unary_operator)).fail_with_panic(&state.current_position)
+                },
             }
         },
-        PreprocessorAst::Leaf(leaf) => match leaf {
-            PreprocessorToken::Macro(macro_name) => {
+        | PreprocessorAst::Leaf(leaf) => match leaf {
+            | PreprocessorToken::Macro(macro_name) => {
                 let default = MacroValue::String(String::from("0"));
                 if let MacroValue::String(macro_string) = state.defines.get(macro_name).map_or(default, clone::Clone::clone) {
                     binary_ast_to_int(&tokens_to_ast(&parse_preprocessor(&macro_string, state), state), state)
                 } else {
-PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_warning(&state.current_position); 0
+                    PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_warning(&state.current_position);
+                    0
                 }
             },
-            PreprocessorToken::LiteralNumber(x) => *x,
-            PreprocessorToken::LiteralString(_) => PreprocessorError::StringsNotAllowed.fail_with_panic(&state.current_position),
-            PreprocessorToken::Operator(_) | PreprocessorToken::Bracing(_) | PreprocessorToken::NonOpSymbol(_) => PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_panic(&state.current_position),
+            | PreprocessorToken::LiteralNumber(x) => *x,
+            | PreprocessorToken::LiteralString(_) => PreprocessorError::StringsNotAllowed.fail_with_panic(&state.current_position),
+            | PreprocessorToken::Operator(_) | PreprocessorToken::Bracing(_) | PreprocessorToken::NonOpSymbol(_) => {
+                PreprocessorError::InvalidLeaf(&format!("{leaf:?}")).fail_with_panic(&state.current_position)
+            },
         },
     }
 }

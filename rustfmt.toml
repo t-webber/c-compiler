@@ -1,5 +1,8 @@
 edition = "2021"
-max_width = 150 
-hard_tabs = false 
-tab_spaces = 4 
+max_width = 150
+hard_tabs = false
+tab_spaces = 4
 newline_style = "Unix"
+match_arm_leading_pipes = "Always"
+match_block_trailing_comma = true
+wrap_comments = true

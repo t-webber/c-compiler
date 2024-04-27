@@ -34,7 +34,11 @@
 //     While,
 // }
 
-use crate::{arithmetic::CheckedOperations, errors::FilePosition, structs::ParsingState};
+use crate::{
+    arithmetic::CheckedOperations,
+    errors::{FailError, FilePosition, SystemError},
+    structs::ParsingState,
+};
 
 #[allow(unused)]
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -103,16 +107,16 @@ pub trait OperatorTrait {
 impl OperatorTrait for UnaryOperator {
     fn precedence(&self) -> u32 {
         match self {
-            Self::Defined => 0,
-            Self::Increment | Self::Decrement => 1,
-            Self::Plus | Self::Minus | Self::Not | Self::BitwiseNot => 2,
+            | Self::Defined => 0,
+            | Self::Increment | Self::Decrement => 1,
+            | Self::Plus | Self::Minus | Self::Not | Self::BitwiseNot => 2,
         }
     }
 
     fn associativity(&self) -> Associativity {
         match self {
-            Self::Plus | Self::Minus | Self::Not | Self::BitwiseNot => Associativity::RightToLeft,
-            Self::Increment | Self::Defined | Self::Decrement => Associativity::LeftToRight,
+            | Self::Plus | Self::Minus | Self::Not | Self::BitwiseNot => Associativity::RightToLeft,
+            | Self::Increment | Self::Defined | Self::Decrement => Associativity::LeftToRight,
         }
     }
 }
@@ -120,17 +124,17 @@ impl OperatorTrait for UnaryOperator {
 impl OperatorTrait for BinaryOperator {
     fn precedence(&self) -> u32 {
         match self {
-            Self::Mul | Self::Div | Self::Mod => 3,
-            Self::Add | Self::Sub => 4,
-            Self::ShiftLeft | Self::ShiftRight => 5,
-            Self::LessThan | Self::LessEqual | Self::GreaterThan | Self::GreaterEqual => 6,
-            Self::Eequal | Self::NotEqual => 7,
-            Self::BitwiseAnd => 8,
-            Self::BitwiseXor => 9,
-            Self::BitwiseOr => 10,
-            Self::And => 11,
-            Self::Or => 12,
-            Self::AddAssign
+            | Self::Mul | Self::Div | Self::Mod => 3,
+            | Self::Add | Self::Sub => 4,
+            | Self::ShiftLeft | Self::ShiftRight => 5,
+            | Self::LessThan | Self::LessEqual | Self::GreaterThan | Self::GreaterEqual => 6,
+            | Self::Eequal | Self::NotEqual => 7,
+            | Self::BitwiseAnd => 8,
+            | Self::BitwiseXor => 9,
+            | Self::BitwiseOr => 10,
+            | Self::And => 11,
+            | Self::Or => 12,
+            | Self::AddAssign
             | Self::SubAssign
             | Self::MulAssign
             | Self::DivAssign
@@ -145,7 +149,7 @@ impl OperatorTrait for BinaryOperator {
 
     fn associativity(&self) -> Associativity {
         match self {
-            Self::AddAssign
+            | Self::AddAssign
             | Self::SubAssign
             | Self::DivAssign
             | Self::ModAssign
@@ -154,7 +158,7 @@ impl OperatorTrait for BinaryOperator {
             | Self::XorAssign
             | Self::ShiftLeftAssign
             | Self::ShiftRightAssign => Associativity::RightToLeft,
-            Self::Sub
+            | Self::Sub
             | Self::Mul
             | Self::Div
             | Self::Mod
@@ -180,16 +184,16 @@ impl OperatorTrait for BinaryOperator {
 impl OperatorTrait for Operator {
     fn precedence(&self) -> u32 {
         match self {
-            Self::Unary(op) => op.precedence(),
-            Self::Binary(op) => op.precedence(),
-            Self::Conditional => 13,
+            | Self::Unary(op) => op.precedence(),
+            | Self::Binary(op) => op.precedence(),
+            | Self::Conditional => 13,
         }
     }
     fn associativity(&self) -> Associativity {
         match self {
-            Self::Unary(op) => op.associativity(),
-            Self::Binary(op) => op.associativity(),
-            Self::Conditional => Associativity::RightToLeft,
+            | Self::Unary(op) => op.associativity(),
+            | Self::Binary(op) => op.associativity(),
+            | Self::Conditional => Associativity::RightToLeft,
         }
     }
 }
@@ -233,61 +237,63 @@ fn is_not_operator(ch: char) -> bool {
     !OPERATORS.contains(&ch)
 }
 
-#[rustfmt::skip]
 fn token_from_str(token_str: &str, current_position: &FilePosition) -> Option<PreprocessorToken> {
     if token_str.is_empty() {
         return None;
-    }
-    ;
+    };
     let no_operator = token_str.chars().all(is_not_operator);
-    
+
     if let Ok(number) = token_str.parse::<f32>() {
         #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
         no_operator.then_some(PreprocessorToken::LiteralNumber(number as i32))
     } else {
+        use BinaryOperator as BOp;
+        use Operator as Op;
+        use PreprocessorToken as Tok;
+        use UnaryOperator as UOp;
         Some(match token_str {
-            "?" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Interrogation),
-            ":" => PreprocessorToken::NonOpSymbol(NonOpSymbol::Colon),
-            "*" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Mul)),
-            "/" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Div)),
-            "%" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Mod)),
-            "&" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::BitwiseAnd)),
-            "|" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::BitwiseOr)),
-            "^" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::BitwiseXor)),
-            "<" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::LessThan)),
-            ">" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::GreaterThan)),
-            ">>" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftRight)),
-            "<<" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftLeft)),
-            "!=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::NotEqual)),
-            "==" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Eequal)),
-            "+=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::AddAssign)),
-            "-=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::SubAssign)),
-            "*=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::MulAssign)),
-            "/=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::DivAssign)),
-            "%=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ModAssign)),
-            "<=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::LessEqual)),
-            ">=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::GreaterEqual)),
-            "&=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::AndAssign)),
-            "|=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::OrAssign)),
-            "^=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::XorAssign)),
-            "&&" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::And)),
-            "||" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::Or)),
-            ">>=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftRightAssign)),
-            "<<=" => PreprocessorToken::Operator(Operator::Binary(BinaryOperator::ShiftLeftAssign)),
-            "(" => PreprocessorToken::Bracing(Bracing::LeftParenthesis),
-            ")" => PreprocessorToken::Bracing(Bracing::RightParenthesis),
-            "[" => PreprocessorToken::Bracing(Bracing::LeftBracket),
-            "]" => PreprocessorToken::Bracing(Bracing::RightBracket),
-            "{" => PreprocessorToken::Bracing(Bracing::LeftBrace),
-            "}" => PreprocessorToken::Bracing(Bracing::RightBrace),
-            "!" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Not)),
-            "+" =>  PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Plus)),
-            "-" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Minus)),
-            "++" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Increment)),
-            "--" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Decrement)),
-            "~" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::BitwiseNot)),
-            "defined" => PreprocessorToken::Operator(Operator::Unary(UnaryOperator::Defined)),
-            _ => {
+            | "(" => Tok::Bracing(Bracing::LeftParenthesis),
+            | ")" => Tok::Bracing(Bracing::RightParenthesis),
+            | "[" => Tok::Bracing(Bracing::LeftBracket),
+            | "]" => Tok::Bracing(Bracing::RightBracket),
+            | "{" => Tok::Bracing(Bracing::LeftBrace),
+            | "}" => Tok::Bracing(Bracing::RightBrace),
+            | "?" => Tok::NonOpSymbol(NonOpSymbol::Interrogation),
+            | ":" => Tok::NonOpSymbol(NonOpSymbol::Colon),
+            | "*" => Tok::Operator(Op::Binary(BOp::Mul)),
+            | "/" => Tok::Operator(Op::Binary(BOp::Div)),
+            | "%" => Tok::Operator(Op::Binary(BOp::Mod)),
+            | "&" => Tok::Operator(Op::Binary(BOp::BitwiseAnd)),
+            | "|" => Tok::Operator(Op::Binary(BOp::BitwiseOr)),
+            | "^" => Tok::Operator(Op::Binary(BOp::BitwiseXor)),
+            | "<" => Tok::Operator(Op::Binary(BOp::LessThan)),
+            | ">" => Tok::Operator(Op::Binary(BOp::GreaterThan)),
+            | ">>" => Tok::Operator(Op::Binary(BOp::ShiftRight)),
+            | "<<" => Tok::Operator(Op::Binary(BOp::ShiftLeft)),
+            | "!=" => Tok::Operator(Op::Binary(BOp::NotEqual)),
+            | "==" => Tok::Operator(Op::Binary(BOp::Eequal)),
+            | "+=" => Tok::Operator(Op::Binary(BOp::AddAssign)),
+            | "-=" => Tok::Operator(Op::Binary(BOp::SubAssign)),
+            | "*=" => Tok::Operator(Op::Binary(BOp::MulAssign)),
+            | "/=" => Tok::Operator(Op::Binary(BOp::DivAssign)),
+            | "%=" => Tok::Operator(Op::Binary(BOp::ModAssign)),
+            | "<=" => Tok::Operator(Op::Binary(BOp::LessEqual)),
+            | ">=" => Tok::Operator(Op::Binary(BOp::GreaterEqual)),
+            | "&=" => Tok::Operator(Op::Binary(BOp::AndAssign)),
+            | "|=" => Tok::Operator(Op::Binary(BOp::OrAssign)),
+            | "^=" => Tok::Operator(Op::Binary(BOp::XorAssign)),
+            | "&&" => Tok::Operator(Op::Binary(BOp::And)),
+            | "||" => Tok::Operator(Op::Binary(BOp::Or)),
+            | ">>=" => Tok::Operator(Op::Binary(BOp::ShiftRightAssign)),
+            | "<<=" => Tok::Operator(Op::Binary(BOp::ShiftLeftAssign)),
+            | "!" => Tok::Operator(Op::Unary(UOp::Not)),
+            | "+" => Tok::Operator(Op::Unary(UOp::Plus)),
+            | "-" => Tok::Operator(Op::Unary(UOp::Minus)),
+            | "++" => Tok::Operator(Op::Unary(UOp::Increment)),
+            | "--" => Tok::Operator(Op::Unary(UOp::Decrement)),
+            | "~" => Tok::Operator(Op::Unary(UOp::BitwiseNot)),
+            | "defined" => Tok::Operator(Op::Unary(UOp::Defined)),
+            | _ => {
                 if (token_str.starts_with('\"')
                     && token_str
                         .char_indices()
@@ -302,15 +308,17 @@ fn token_from_str(token_str: &str, current_position: &FilePosition) -> Option<Pr
                     PreprocessorToken::LiteralString(
                         token_str
                             .get(1..token_str.len().checked_sub_unwrap(1, current_position))
-                            .expect("Catastrophic failure")
+                            .unwrap_or_else(|| {
+                                SystemError::CompilationError("Found string but could not parse the delimiters.").fail_with_panic(current_position)
+                            })
                             .to_owned(),
                     )
                 } else if no_operator {
                     PreprocessorToken::Macro(token_str.to_owned())
                 } else {
-                    return None
+                    return None;
                 }
-            }
+            },
         })
     }
 }

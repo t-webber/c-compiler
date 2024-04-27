@@ -1,7 +1,8 @@
 target
 .vscode
-*.lock
 .*/
 *test*
 asm/*.exe
-asm/*.obj
+*.lock
+*.obj
+*.udd

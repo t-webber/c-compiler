@@ -38,7 +38,7 @@ fn main() -> Result<(), io::Error> {
     // run_main("/usr/lib/gcc/x86_64-linux-gnu/12/include/stddef.h")
     // test_parser(env::args().collect::<Vec<String>>().get(1).map_or(
     //     // "! defined (_FILE_OFFSET_BITS) || _FILE_OFFSET_BITS != 64",
-    //     "# define __REDIRECT(name, proto, alias) name proto __asm__ (__ASMNAME (#alias)) \n\n (!defined __LDBL_COMPAT && __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI == 0) || !defined __REDIRECT",
+    //     "defined _VCRT_BUILD || !defined CRTDLL && !defined _VCRT_SAT_1",
     //     |argv| argv.as_str(),
     // ));
     // Ok(())
@@ -49,7 +49,7 @@ fn run_main(path: &str) -> io::Result<()> {
     if !SUPPORTED_OS.contains(&OS) {
         SystemError::UnsupportedOS.fail_with_panic(&structs::ParsingState::default().current_position);
     }
-    let preprocessed_file = preprocessor::preprocess_unit(PathBuf::from(path));
+    let preprocessed_file = preprocessor::preprocess_unit(&PathBuf::from(path));
     let mut data: &mut [u8] = &mut [0; 32];
     #[allow(clippy::expect_used)]
     let mut file = File::create(format!(

@@ -8,7 +8,7 @@ pub struct FilePosition {
 
 trait GetCode<'msg> {
     const INCREMENT: u32;
-    fn get_code(&'msg self) -> (u32, String);
+    fn get_code(&'msg self) -> (u32, Box<str>);
 }
 
 #[allow(unused)]
@@ -22,12 +22,12 @@ pub enum SystemError<'msg> {
 #[rustfmt::skip]
 impl<'msg> GetCode<'msg> for SystemError<'msg> {
     const INCREMENT: u32 = 0;
-    fn get_code(&self) -> (u32, String) {
+    fn get_code(&self) -> (u32, Box<str>) {
         match self {
-            Self::UnsupportedOS =>  (1, String::from("operating system '{msg}' isn't supported")),
-            Self::CompilationError(message) => (2, String::from(&format!("compilation error: {message}"))),
-            Self::AccessLocalDenied => (8, String::from("path to the source code is denied")),
-            Self::AccessLibraryDenied(msg) => (9, format!("path to the library {msg} is denied")),
+            Self::UnsupportedOS =>  (1, Box::from("your operating system isn't supported")),
+            Self::CompilationError(message) => (2, Box::from(format!("compilation error: {message}").as_str())),
+            Self::AccessLocalDenied => (8, Box::from("path to the source code is denied")),
+            Self::AccessLibraryDenied(msg) => (9, Box::from(format!("path to the library {msg} is denied").as_str())),
         }
     }
 }
@@ -35,29 +35,42 @@ impl<'msg> GetCode<'msg> for SystemError<'msg> {
 #[allow(unused)]
 pub enum GeneralError<'msg> {
     UnclosedComment { file_position: &'msg FilePosition, level: u32 },
+    UnOpenedComment { level: u32 },
     UnclosedString,
     UnclosedChar,
     UnclosedParenthesis,
+    UnOpenedParenthesis,
     UnclosedBracket,
     UnclosedBrace,
     MainNotFound,
     Overflow,
+    NotImplemented(&'msg str),
 }
 
-#[rustfmt::skip]
 impl<'msg> GetCode<'msg> for GeneralError<'msg> {
     const INCREMENT: u32 = 100;
-    fn get_code(&self) -> (u32, String) {
+    fn get_code(&self) -> (u32, Box<str>) {
         match self {
-            Self::UnclosedComment {file_position , level} => (1, format!("unclosed comment that started {}:{}:{} with level {level}",
-                                                                                                file_position.filepath, file_position.line, file_position.col)),
-            Self::UnclosedString => (2, String::from("unclosed string")),
-            Self::UnclosedChar => (3, String::from("unclosed char")),
-            Self::UnclosedParenthesis => (4, String::from("unclosed parenthesis")),
-            Self::UnclosedBracket => (5, String::from("unclosed bracket")),
-            Self::UnclosedBrace => (6, String::from("unclosed brace")),
-            Self::MainNotFound => (7, String::from("main not found")),
-            Self::Overflow => (9, String::from("overflow on airthmetic operation")),
+            | Self::UnclosedComment { file_position, level } => (
+                1,
+                Box::from(
+                    format!(
+                        "unclosed comment that started {}:{}:{} with level {level}",
+                        file_position.filepath, file_position.line, file_position.col
+                    )
+                    .as_str(),
+                ),
+            ),
+            | Self::UnOpenedComment { level } => (1, Box::from(format!("unopened comment with level {level}").as_str())),
+            | Self::UnclosedString => (2, Box::from("unclosed string")),
+            | Self::UnclosedChar => (3, Box::from("unclosed char")),
+            | Self::UnclosedParenthesis => (4, Box::from("unclosed parenthesis")),
+            | Self::UnclosedBracket => (5, Box::from("unclosed bracket")),
+            | Self::UnclosedBrace => (6, Box::from("unclosed brace")),
+            | Self::MainNotFound => (7, Box::from("main not found")),
+            | Self::Overflow => (9, Box::from("overflow on airthmetic operation")),
+            | Self::NotImplemented(msg) => (10, Box::from(format!("feature not implemented yet: {msg}").as_str())),
+            | Self::UnOpenedParenthesis => (8, Box::from("unopened parenthesis")),
         }
     }
 }
@@ -78,13 +91,13 @@ pub enum PreprocessorError<'msg> {
     MacroArgsNotClosed,
     MacroNotDefined(&'msg str),
     //
-    IncompleteOperator(&'msg str),
+    IncompleteOperator,
+    TooManyArguments,
     InvalidOperator(&'msg str),
     DefinedChildNotLeaf,
     DefinedChildNotMacro,
     InvalidLeaf(&'msg str),
     StringsNotAllowed,
-    BinarySynthaxOnUnary(&'msg str),
     EmptyParenthesis,
     //
     ElifWithoutIf,
@@ -99,38 +112,38 @@ pub enum PreprocessorError<'msg> {
 #[rustfmt::skip]
 impl<'msg> GetCode<'msg> for PreprocessorError<'msg> {
     const INCREMENT: u32 = 200;
-    fn get_code(&'msg self) -> (u32, String) {
+    fn get_code(&'msg self) -> (u32, Box<str>) {
         match self {
-            Self::Internal(message) => (99, format!("internal error: {message}.\nPlease raise an issue") ),
+            Self::Internal(message) => (99, Box::from(format!("internal error: {message}.\nPlease raise an issue").as_str())),
 
-            Self::DirectiveNameMissing => (1, String::from("directive name missing")),
-            Self::InvalidSharpPosition => (2, String::from("invalid sharp position")),
-            Self::DefinedSynthax => (3, String::from("expected to find a macro between \" or <> in defined directive")),
+            Self::DirectiveNameMissing => (1, Box::from("directive name missing")),
+            Self::InvalidSharpPosition => (2, Box::from("invalid sharp position")),
+            Self::DefinedSynthax => (3, Box::from("expected to find a macro between \" or <> in defined directive")),
             //
-            Self::InvalidFileName(filename) => (11, format!("invalid filename {filename}")),
-            Self::FileNotFound(filename) => (12, format!("file {filename} not found")),
-            Self::FileNotReadable(filename) => (13, format!("file {filename} not readable")),
+            Self::InvalidFileName(filename) => (11, Box::from(format!("invalid filename {filename}").as_str())),
+            Self::FileNotFound(filename) => (12, Box::from(format!("file {filename} not found").as_str())),
+            Self::FileNotReadable(filename) => (13, Box::from(format!("file {filename} not readable").as_str())),
             //
-            Self::InvalidMacroName(name) => (21, format!("invalid macro name {name}")),
-            Self::MacroArgsNotClosed => (22, String::from("macro arguments not closed")),
-            Self::MacroNotDefined(name) => (23, format!("macro {name} not defined")),
+            Self::InvalidMacroName(name) => (21, Box::from(format!("invalid macro name {name}").as_str())),
+            Self::MacroArgsNotClosed => (22, Box::from("macro arguments not closed")),
+            Self::MacroNotDefined(name) => (23, Box::from(format!("macro {name} not defined").as_str())),
             //
-            Self::IncompleteOperator(operator) => (31,format!("incomplete operator {operator}: missing argument")),
-            Self::InvalidOperator(operator) => (31,format!("invalid operator {operator}: not supported in preprocessor")),
-            Self::DefinedChildNotLeaf => (32, String::from("child of \"defined\" should be a leaf")),
-            Self::DefinedChildNotMacro => (33, String::from("a macro was expected after defined")),
-            Self::InvalidLeaf(leaf) => (34, format!("invalid leaf {leaf}")),
-            Self::StringsNotAllowed => (35, String::from("strings not allowed in preprocessor")),
-            Self::BinarySynthaxOnUnary(operator) => (36, format!("found the unary operator {operator}, following a binary operator synthax")),
-            Self::EmptyParenthesis => (37, String::from("empty parenthesis")),
+            Self::IncompleteOperator => (31, Box::from("incomplete operator: missing argument")),
+            Self::TooManyArguments => (32, Box::from("too many arguments")),
+            Self::InvalidOperator(operator) => (33,Box::from(format!("invalid operator {operator}: not supported in preprocessor").as_str())),
+            Self::DefinedChildNotLeaf => (34, Box::from("child of \"defined\" should be a leaf")),
+            Self::DefinedChildNotMacro => (35, Box::from("a macro was expected after defined")),
+            Self::InvalidLeaf(leaf) => (36, Box::from(format!("invalid leaf {leaf}").as_str())),
+            Self::StringsNotAllowed => (37, Box::from("strings not allowed in preprocessor")),
+            Self::EmptyParenthesis => (38, Box::from("empty parenthesis")),
             //
-            Self::ElifWithoutIf => (41, String::from("elif found without an if")),
-            Self::ElseWithoutIf => (42, String::from("else found without an if")),
-            Self::EndifWithoutIf => (43, String::from("endif found without an if")),
+            Self::ElifWithoutIf => (41, Box::from("elif found without an if")),
+            Self::ElseWithoutIf => (42, Box::from("else found without an if")),
+            Self::EndifWithoutIf => (43, Box::from("endif found without an if")),
             //
-            Self::DirectiveError(message) => (51, format!("#error raised {message}")),
-            Self::DirectiveWarning(message) => (52, format!("#warning raised {message}")),
-            Self::DirectiveUnknown(message) => (53, format!("directive {message} unknown by compiler")),
+            Self::DirectiveError(message) => (51, Box::from(format!("#error raised {message}").as_str())),
+            Self::DirectiveWarning(message) => (52, Box::from(format!("#warning raised {message}").as_str())),
+            Self::DirectiveUnknown(message) => (53, Box::from(format!("directive {message} unknown by compiler").as_str())),
         }
     }
 }
